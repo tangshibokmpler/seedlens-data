@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "tables": [
+    {
+      "label": "global view state",
+      "kind": "data_unversioned",
+      "table": "t_global_state_views",
+      "primaryKey": ["global_table_name_key"],
+      "columns": {
+        "global_table_name_key": { "type": "string", "nullable": false },
+        "heartbeat_lease_at": { "type": "timestamptz", "nullable": false },
+        "reconcile_status": { "type": "string", "nullable": true },
+        "status_updated_at": { "type": "timestamptz", "nullable": true },
+        "view_reconcile_state": { "type": "string", "nullable": false },
+        "last_reconciled_view_schema": { "type": "string", "nullable": true }
+      }
+    },
+    {
+      "label": "data source pipeline state",
+      "kind": "data_unversioned",
+      "table": "t_factory_state_source",
+      "primaryKey": ["data_source_name_key"],
+      "columns": {
+        "data_source_name_key": { "type": "string", "nullable": false },
+        "heartbeat_lease_at": { "type": "timestamptz", "nullable": false },
+        "reconcile_status": { "type": "string", "nullable": true },
+        "status_updated_at": { "type": "timestamptz", "nullable": true },
+        "state": { "type": "string", "nullable": false }
+      }
+    },
+    {
+      "label": "source material pipeline state",
+      "kind": "data_unversioned",
+      "table": "t_factory_state_source_material",
+      "primaryKey": ["data_source_name_key"],
+      "columns": {
+        "data_source_name_key": { "type": "string", "nullable": false },
+        "heartbeat_lease_at": { "type": "timestamptz", "nullable": false },
+        "reconcile_status": { "type": "string", "nullable": true },
+        "status_updated_at": { "type": "timestamptz", "nullable": true },
+        "reconcile_state": { "type": "string", "nullable": false }
+      }
+    },
+    {
+      "label": "data table pipeline state",
+      "kind": "data_unversioned",
+      "table": "t_factory_state_asset",
+      "primaryKey": ["config_key"],
+      "columns": {
+        "config_key": { "type": "string", "nullable": false },
+        "heartbeat_lease_at": { "type": "timestamptz", "nullable": false },
+        "reconcile_status": { "type": "string", "nullable": true },
+        "status_updated_at": { "type": "timestamptz", "nullable": true },
+        "table_reconcile_state": { "type": "string", "nullable": false },
+        "data_reconcile_state": { "type": "string", "nullable": false }
+      }
+    },
+    {
+      "label": "ontology bind pipeline state",
+      "kind": "data_unversioned",
+      "table": "t_ontology_state_bind",
+      "primaryKey": ["asset_name_key"],
+      "columns": {
+        "asset_name_key": { "type": "string", "nullable": false },
+        "heartbeat_lease_at": { "type": "timestamptz", "nullable": false },
+        "reconcile_status": { "type": "string", "nullable": true },
+        "status_updated_at": { "type": "timestamptz", "nullable": true },
+        "object_table_reconcile_state": { "type": "string", "nullable": false },
+        "data_reconcile_state": { "type": "string", "nullable": false }
+      }
+    },
+    {
+      "label": "environment pipeline final state",
+      "kind": "data_unversioned",
+      "table": "t_system_state_overview",
+      "primaryKey": ["state_key"],
+      "columns": {
+        "state_key": { "type": "string", "nullable": false },
+        "heartbeat_lease_at": { "type": "timestamptz", "nullable": false },
+        "reconcile_status": { "type": "string", "nullable": false },
+        "status_updated_at": { "type": "timestamptz", "nullable": false },
+        "critical_summary": { "type": "string", "nullable": false },
+        "reference_summary": { "type": "string", "nullable": false }
+      }
+    }
+  ]
+}
