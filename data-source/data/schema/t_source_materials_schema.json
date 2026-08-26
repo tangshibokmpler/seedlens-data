@@ -2,9 +2,7 @@
   "version": 1,
   "tables": [
     {
-      "label": "source materials",
       "table": "t_factory_config_source_materials",
-      "primaryKey": ["source_material_key"],
       "columns": {
         "source_material_key": {
           "type": "string",
@@ -21,10 +19,22 @@
           "nullable": false,
           "description": "数据源引擎类型，例如 pg、mysql 或 sqlserver。"
         },
-        "source_catalog_name": { "type": "string", "nullable": false },
-        "source_schema_name": { "type": "string", "nullable": false },
-        "source_table_name": { "type": "string", "nullable": false },
-        "source_table_type": { "type": "string", "nullable": false },
+        "source_catalog_name": {
+          "type": "string",
+          "nullable": false
+        },
+        "source_schema_name": {
+          "type": "string",
+          "nullable": false
+        },
+        "source_table_name": {
+          "type": "string",
+          "nullable": false
+        },
+        "source_table_type": {
+          "type": "string",
+          "nullable": false
+        },
         "material_schema": {
           "type": "json",
           "nullable": false,
@@ -40,9 +50,18 @@
           "nullable": false,
           "description": "最近一次实际改变该原料结构的管道运行 ID。"
         },
-        "created_at": { "type": "timestamptz", "nullable": false },
-        "updated_at": { "type": "timestamptz", "nullable": false }
-      }
+        "created_at": {
+          "type": "timestamptz",
+          "nullable": false
+        },
+        "updated_at": {
+          "type": "timestamptz",
+          "nullable": false
+        }
+      },
+      "primaryKey": [
+        "source_material_key"
+      ]
     }
   ]
 }

@@ -2,7 +2,7 @@
   "version": 1,
   "tables": [
     {
-      "label": "pipeline config",
+      "table": "t_factory_config_pipeline",
       "columns": {
         "name": {
           "type": "string",
@@ -45,8 +45,9 @@
           "description": "源到资产处理配置。内置管道期望 source.table、target.asset_table、target.primary_key 和 field_mappings；超 38 位 decimal 可在字段映射显式设置 target_type=string。"
         }
       },
-      "table": "t_factory_config_pipeline",
-      "primaryKey": ["name"]
+      "primaryKey": [
+        "name"
+      ]
     }
   ]
 }

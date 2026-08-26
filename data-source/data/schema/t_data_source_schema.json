@@ -2,10 +2,16 @@
   "version": 1,
   "tables": [
     {
-      "label": "data source",
+      "table": "t_factory_config_source",
       "columns": {
-        "name": { "type": "string", "nullable": false },
-        "kind": { "type": "string", "nullable": false },
+        "name": {
+          "type": "string",
+          "nullable": false
+        },
+        "kind": {
+          "type": "string",
+          "nullable": false
+        },
         "builtin_kind": {
           "type": "string",
           "nullable": true,
@@ -22,8 +28,9 @@
           "description": "CDC source配置。PostgreSQL stream使用enabled、topicSuffix、tables与snapshotMode，topic固定为{tenant}.{env}.{suffix}."
         }
       },
-      "table": "t_factory_config_source",
-      "primaryKey": ["name"]
+      "primaryKey": [
+        "name"
+      ]
     }
   ]
 }
