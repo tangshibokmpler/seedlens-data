@@ -3,7 +3,6 @@
   "tables": [
     {
       "label": "data source",
-      "kind": "control",
       "columns": {
         "name": { "type": "string", "nullable": false },
         "kind": { "type": "string", "nullable": false },
