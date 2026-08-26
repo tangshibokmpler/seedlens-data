@@ -1,0 +1,15 @@
+{
+  "name": "u8-999-test-sqlserver",
+  "kind": "builtin",
+  "builtin_kind": "sqlserver",
+  "connection": {
+    "host": "47.111.100.209",
+    "port": 1433,
+    "database": "U8_999_TEST",
+    "schema": "dbo",
+    "user": "admin_user",
+    "password": "SeedMode@2026!",
+    "encrypt": true,
+    "trustServerCertificate": true
+  }
+}

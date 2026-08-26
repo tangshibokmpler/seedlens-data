@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "tables": [
+    {
+      "label": "pipeline config",
+      "kind": "control",
+      "columns": {
+        "name": {
+          "type": "string",
+          "nullable": false,
+          "description": "名称,也是主键,唯一"
+        },
+        "data_source_key": {
+          "type": "string",
+          "nullable": false,
+          "description": "数据源名称, 引用 t_factory_config_source.name."
+        },
+        "target_asset_type": {
+          "type": "string",
+          "nullable": false,
+          "description": "目标数据资产类型, 允许值: virtual, physical. 即虚拟资产和物理资产"
+        },
+        "kind": {
+          "type": "string",
+          "nullable": false,
+          "description": "实现类型, 允许值: builtin, custom. 即内置和自定义"
+        },
+        "pipeline_code_key": {
+          "type": "string",
+          "nullable": false,
+          "description": "Lakectd 注册的 pipelineKey, 用于执行此 pipeline 配置"
+        },
+        "data_asset_name": {
+          "type": "string",
+          "nullable": true,
+          "description": "数据资产名称"
+        },
+        "trigger": {
+          "type": "json",
+          "nullable": true,
+          "description": "可选的执行触发器. 当前只支持 CDC 触发器"
+        },
+        "processing_config": {
+          "type": "json",
+          "nullable": false,
+          "description": "源到资产处理配置。内置管道期望 source.table、target.asset_table、target.primary_key 和 field_mappings；超 38 位 decimal 可在字段映射显式设置 target_type=string。"
+        }
+      },
+      "table": "t_factory_config_pipeline",
+      "primaryKey": ["name"]
+    }
+  ]
+}

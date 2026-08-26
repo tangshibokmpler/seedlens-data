@@ -1,0 +1,54 @@
+{
+  "data_asset_name": "ds_part_snapshot",
+  "data_source_key": "test-postgres",
+  "kind": "builtin",
+  "name": "part_snapshot_physical",
+  "pipeline_code_key": "builtin_physical_dataset",
+  "processing_config": {
+    "field_mappings": [
+      {
+        "source_field": "part_no",
+        "target_field": "part_no"
+      },
+      {
+        "source_field": "part_name",
+        "target_field": "part_name"
+      },
+      {
+        "source_field": "supplier_id",
+        "target_field": "supplier_id"
+      },
+      {
+        "source_field": "stock_qty",
+        "target_field": "stock_qty"
+      },
+      {
+        "source_field": "safety_stock",
+        "target_field": "safety_stock"
+      },
+      {
+        "source_field": "unit_cost",
+        "target_field": "unit_cost"
+      },
+      {
+        "source_field": "status",
+        "target_field": "status"
+      },
+      {
+        "source_field": "updated_at",
+        "target_field": "updated_at"
+      }
+    ],
+    "source": {
+      "table": "part_snapshot"
+    },
+    "target": {
+      "asset_table": "part_snapshot",
+      "primary_key": [
+        "part_no"
+      ]
+    }
+  },
+  "target_asset_type": "physical",
+  "trigger": null
+}
