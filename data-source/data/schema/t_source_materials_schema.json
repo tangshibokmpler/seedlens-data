@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "tables": [
+    {
+      "table": "t_factory_config_source_materials",
+      "columns": {
+        "source_material_key": {
+          "type": "string",
+          "nullable": false,
+          "description": "数据源、catalog、schema 与原料表名组成的稳定哈希键。"
+        },
+        "data_source_name_key": {
+          "type": "string",
+          "nullable": false,
+          "description": "引用 t_factory_config_source.name。"
+        },
+        "data_source_type": {
+          "type": "string",
+          "nullable": false,
+          "description": "数据源引擎类型，例如 pg、mysql 或 sqlserver。"
+        },
+        "source_catalog_name": {
+          "type": "string",
+          "nullable": false
+        },
+        "source_schema_name": {
+          "type": "string",
+          "nullable": false
+        },
+        "source_table_name": {
+          "type": "string",
+          "nullable": false
+        },
+        "source_table_type": {
+          "type": "string",
+          "nullable": false
+        },
+        "material_schema": {
+          "type": "json",
+          "nullable": false,
+          "description": "规范化后的最新原料表结构。"
+        },
+        "schema_hash": {
+          "type": "string",
+          "nullable": false,
+          "description": "规范化 material_schema 的 SHA-256。"
+        },
+        "last_changed_run_id": {
+          "type": "string",
+          "nullable": false,
+          "description": "最近一次实际改变该原料结构的管道运行 ID。"
+        },
+        "created_at": {
+          "type": "timestamptz",
+          "nullable": false
+        },
+        "updated_at": {
+          "type": "timestamptz",
+          "nullable": false
+        }
+      },
+      "primaryKey": [
+        "source_material_key"
+      ]
+    }
+  ]
+}

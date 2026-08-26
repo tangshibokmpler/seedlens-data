@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "tables": [
+    {
+      "table": "t_factory_config_source",
+      "columns": {
+        "name": {
+          "type": "string",
+          "nullable": false
+        },
+        "kind": {
+          "type": "string",
+          "nullable": false
+        },
+        "builtin_kind": {
+          "type": "string",
+          "nullable": true,
+          "description": "内置关系型数据源类型: pg、mysql 或 sqlserver。"
+        },
+        "connection": {
+          "type": "json",
+          "nullable": false,
+          "description": "连接配置。SQL Server 支持 host、port、database、schema、user、password、encrypt 与 trustServerCertificate。"
+        },
+        "stream": {
+          "type": "json",
+          "nullable": true,
+          "description": "CDC source配置。PostgreSQL stream使用enabled、topicSuffix、tables与snapshotMode，topic固定为{tenant}.{env}.{suffix}."
+        }
+      },
+      "primaryKey": [
+        "name"
+      ]
+    }
+  ]
+}
