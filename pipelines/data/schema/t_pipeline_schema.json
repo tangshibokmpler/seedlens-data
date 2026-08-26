@@ -3,7 +3,6 @@
   "tables": [
     {
       "label": "pipeline config",
-      "kind": "control",
       "columns": {
         "name": {
           "type": "string",

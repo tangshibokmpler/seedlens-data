@@ -3,7 +3,6 @@
   "tables": [
     {
       "label": "source materials",
-      "kind": "data_versioned",
       "table": "t_factory_config_source_materials",
       "primaryKey": ["source_material_key"],
       "columns": {
