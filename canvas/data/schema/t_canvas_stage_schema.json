@@ -1,44 +1,43 @@
 {
-    "version": 1,
-    "tables": [
-      {
-        "table": "t_system_config_canvas_stage",
-        "label": "studio canvas stage",
-        "columns": {
-          "stage_key": {
-            "type": "string",
-            "nullable": false,
-            "description": "画布环节的稳定标识，不使用展示名称作为身份。"
-          },
-          "stage_name": {
-            "type": "string",
-            "nullable": false,
-            "description": "画布中展示的环节名称。"
-          },
-          "stage_description": {
-            "type": "string",
-            "nullable": false,
-            "description": "画布环节的说明。"
-          },
-          "business_domain_key": {
-            "type": "string",
-            "nullable": true,
-            "description": "业务域稳定 ID；省略或为 null 表示适用于全部业务域。"
-          },
-          "table_kind": {
-            "type": "string",
-            "nullable": false,
-            "description": "目标表所属数据面，第一版允许 control 或 data_versioned。"
-          },
-          "table_name": {
-            "type": "string",
-            "nullable": false,
-            "description": "该环节节点数据对应的 SeedFlux 业务表名。"
-          }
+  "version": 1,
+  "tables": [
+    {
+      "table": "t_system_config_canvas_stage",
+      "columns": {
+        "stage_key": {
+          "type": "string",
+          "nullable": false,
+          "description": "画布环节的稳定标识，不使用展示名称作为身份。"
         },
-        "primaryKey": [
-          "stage_key"
-        ]
-      }
-    ]
-  }
+        "stage_name": {
+          "type": "string",
+          "nullable": false,
+          "description": "画布中展示的环节名称。"
+        },
+        "stage_description": {
+          "type": "string",
+          "nullable": false,
+          "description": "画布环节的说明。"
+        },
+        "business_domain_key": {
+          "type": "string",
+          "nullable": true,
+          "description": "业务域稳定 ID；省略或为 null 表示适用于全部业务域。"
+        },
+        "table_kind": {
+          "type": "string",
+          "nullable": false,
+          "description": "目标表所属数据面，第一版允许 control 或 data_versioned。"
+        },
+        "table_name": {
+          "type": "string",
+          "nullable": false,
+          "description": "该环节节点数据对应的 SeedFlux 业务表名。"
+        }
+      },
+      "primaryKey": [
+        "stage_key"
+      ]
+    }
+  ]
+}
