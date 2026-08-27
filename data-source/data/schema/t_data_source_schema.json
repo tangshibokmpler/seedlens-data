@@ -8,6 +8,11 @@
           "type": "string",
           "nullable": false
         },
+        "description": {
+          "type": "string",
+          "nullable": true,
+          "description": "数据源描述。"
+        },
         "kind": {
           "type": "string",
           "nullable": false

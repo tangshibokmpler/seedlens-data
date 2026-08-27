@@ -4,6 +4,7 @@
   "rows": [
     {
       "name": "u8-999-test-sqlserver",
+      "description": "用友测试数据源",
       "kind": "builtin",
       "builtin_kind": "sqlserver",
       "connection": {
