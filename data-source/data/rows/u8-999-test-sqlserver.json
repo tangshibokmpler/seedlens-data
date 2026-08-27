@@ -16,16 +16,6 @@
         "password": "SeedMode@2026!",
         "encrypt": true,
         "trustServerCertificate": true
-      },
-      "pipeline_entries": {
-        "configLoad": {
-          "codePath": "data-source/code/configLoad/index.ts",
-          "pipelineKey": "builtin_data_source_load"
-        },
-        "materialLoad": {
-          "codePath": "data-source/code/materialLoad/index.ts",
-          "pipelineKey": "builtin_source_material_load"
-        }
       }
     }
   ]
