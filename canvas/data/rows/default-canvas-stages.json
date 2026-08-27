@@ -1,6 +1,6 @@
 {
     "version": 1,
-    "table": "t_studio_config_canvas_stage",
+    "table": "t_system_config_canvas_stage",
     "rows": [
       {
         "stage_key": "data-source",

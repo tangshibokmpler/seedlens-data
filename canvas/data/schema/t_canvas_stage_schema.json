@@ -2,7 +2,7 @@
     "version": 1,
     "tables": [
       {
-        "table": "t_studio_config_canvas_stage",
+        "table": "t_system_config_canvas_stage",
         "label": "studio canvas stage",
         "columns": {
           "stage_key": {
