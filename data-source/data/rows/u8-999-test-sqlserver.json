@@ -7,7 +7,26 @@
       "description": "用友测试数据源",
       "kind": "builtin",
       "builtin_kind": "sqlserver",
-      "connection": "{\"host\":\"47.111.100.209\",\"port\":1433,\"database\":\"U8_999_TEST\",\"schema\":\"dbo\",\"user\":\"admin_user\",\"password\":\"SeedMode@2026!\",\"encrypt\":true,\"trustServerCertificate\":true}"
+      "connection": {
+        "host": "47.111.100.209",
+        "port": 1433,
+        "database": "U8_999_TEST",
+        "schema": "dbo",
+        "user": "admin_user",
+        "password": "SeedMode@2026!",
+        "encrypt": true,
+        "trustServerCertificate": true
+      },
+      "pipeline_entries": {
+        "configLoad": {
+          "codePath": "data-source/code/configLoad/index.ts",
+          "pipelineKey": "builtin_data_source_load"
+        },
+        "materialLoad": {
+          "codePath": "data-source/code/materialLoad/index.ts",
+          "pipelineKey": "builtin_source_material_load"
+        }
+      }
     }
   ]
 }
