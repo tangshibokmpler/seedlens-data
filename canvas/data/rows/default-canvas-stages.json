@@ -1,0 +1,13 @@
+{
+    "version": 1,
+    "table": "t_studio_config_canvas_stage",
+    "rows": [
+      {
+        "stage_key": "data-source",
+        "stage_name": "数据源",
+        "stage_description": "展示当前工作环境中已经登记的数据源。",
+        "table_kind": "control",
+        "table_name": "t_factory_config_source"
+      }
+    ]
+  }
