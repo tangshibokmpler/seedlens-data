@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "tables": [
+    {
+      "label": "environment pipeline final state",
+      "table": "t_system_state_overview",
+      "primaryKey": ["state_key"],
+      "columns": {
+        "state_key": { "type": "string", "nullable": false },
+        "heartbeat_lease_at": { "type": "timestamptz", "nullable": false },
+        "reconcile_status": { "type": "string", "nullable": false },
+        "status_updated_at": { "type": "timestamptz", "nullable": false },
+        "critical_summary": { "type": "string", "nullable": false },
+        "reference_summary": { "type": "string", "nullable": false }
+      }
+    }
+  ]
+}

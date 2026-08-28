@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "tables": [
+    {
+      "label": "pipeline run history",
+      "table": "t_factory_history_pipeline_runs",
+      "primaryKey": ["run_id"],
+      "columns": {
+        "run_id": { "type": "string", "nullable": false },
+        "workspace_id": { "type": "string", "nullable": false },
+        "pipeline_key": { "type": "string", "nullable": false },
+        "pipeline_tag": { "type": "string", "nullable": false },
+        "entry_path": { "type": "string", "nullable": false },
+        "execution_mode": { "type": "string", "nullable": false },
+        "scope_key": { "type": "string", "nullable": false },
+        "scope_json": { "type": "json", "nullable": false },
+        "actor": { "type": "string", "nullable": false },
+        "status": { "type": "string", "nullable": false },
+        "started_at": { "type": "timestamptz", "nullable": false },
+        "finished_at": { "type": "timestamptz", "nullable": false },
+        "detail_json": { "type": "json", "nullable": false },
+        "error_message": { "type": "string", "nullable": true }
+      }
+    }
+  ]
+}
