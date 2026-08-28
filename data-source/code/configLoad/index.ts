@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 
 import { Pipeline } from "@agentnexus/lakecore/model";
+import {
+  assertTargetedRecordInputs,
+  resolveRecordInputs,
+  type PipelineRecordInputs,
+} from "../record-inputs.js";
 import type { ConnectorActiveConfig, PipelineRunContext } from "./types.js";
 import {
   cdcTopicName,
@@ -72,13 +77,17 @@ interface ExpectedKafkaSourceConnector extends KafkaSourceImportConfig {
 
 /**
  * 功能：将当前租户环境的数据源配置装载为 Trino catalog，并为启用 stream 的 PostgreSQL 源维护 Debezium connector。
- * 逻辑：读取完整数据源事实和 datasource name 状态，租约失效或配置变化时收敛 Trino catalog 与 Kafka connector，并清理已移除资源。
- * 幂等：采用 reconcile/cleanup 策略；有效租约只续心跳，成功写 ready，失败写 failed 并等待后续重试。
+ * 逻辑：默认读取完整数据源事实；config.recordInputs 非空时只消费指定记录，收敛对应 Trino catalog 与 Kafka connector。
+ * 幂等：全量模式执行 reconcile/cleanup，定向模式只清理指定数据源自身的陈旧资源；有效租约只续心跳，失败写 failed 并等待后续重试。
  */
 export async function run(context: PipelineRunContext): Promise<void> {
   const options = pipelinePreludeOptions(context.config);
+  const sourceTable = pipelinePreludeTableName(options);
   const stateTable = pipelinePreludeStateTableName(options);
-  const sources = await loadDataSources(context);
+  const recordInputs = resolveRecordInputs(context.config);
+  assertTargetedRecordInputs(recordInputs, [sourceTable]);
+  const targeted = recordInputs.size > 0;
+  const sources = await loadDataSources(context, options, recordInputs);
   const builtinSources = sources.filter(isLoadedBuiltinDataSource);
   const skipped = sources.length - builtinSources.length;
   if (skipped > 0) {
@@ -97,16 +106,24 @@ export async function run(context: PipelineRunContext): Promise<void> {
   });
   assertUniqueCdcTopics(expectedStreams);
   const streamBySource = new Map(expectedStreams.map((stream) => [stream.sourceName, stream]));
-  const expectedByTarget = expectedCatalogsByTarget(context, expectedCatalogs);
-  for (const target of expectedByTarget.values()) {
-    await removeCatalogsMissingFromDataSources(context, {
-      tenantId: target.tenantId,
-      env: target.env,
-      expected: target.expected,
-    });
+  if (targeted) {
+    await removeKafkaConnectorsMissingFromDataSources(
+      context,
+      expectedStreams,
+      new Set(expectedCatalogs.map((catalog) => catalog.key)),
+    );
+  } else {
+    const expectedByTarget = expectedCatalogsByTarget(context, expectedCatalogs);
+    for (const target of expectedByTarget.values()) {
+      await removeCatalogsMissingFromDataSources(context, {
+        tenantId: target.tenantId,
+        env: target.env,
+        expected: target.expected,
+      });
+    }
+    await removeKafkaConnectorsMissingFromDataSources(context, expectedStreams);
   }
 
-  await removeKafkaConnectorsMissingFromDataSources(context, expectedStreams);
   for (const expected of expectedCatalogs) {
     if (context.signal.aborted) {
       throw new Error("pipelinePrelude aborted");
@@ -117,17 +134,19 @@ export async function run(context: PipelineRunContext): Promise<void> {
       stateTable,
     });
   }
-  await removeMissingDataSourceStates(
-    context,
-    stateTable,
-    new Set(sources.flatMap((loaded) => {
-      if (!loaded.source || typeof loaded.source !== "object" || Array.isArray(loaded.source)) {
-        return [];
-      }
-      const name = textField(loaded.source as Record<string, unknown>, "name");
-      return name ? [name] : [];
-    })),
-  );
+  if (!targeted) {
+    await removeMissingDataSourceStates(
+      context,
+      stateTable,
+      new Set(sources.flatMap((loaded) => {
+        if (!loaded.source || typeof loaded.source !== "object" || Array.isArray(loaded.source)) {
+          return [];
+        }
+        const name = textField(loaded.source as Record<string, unknown>, "name");
+        return name ? [name] : [];
+      })),
+    );
+  }
 }
 
 async function reconcileDataSource(
@@ -223,37 +242,43 @@ async function reconcileKafkaSource(
   });
 }
 
-async function loadDataSources(context: PipelineRunContext): Promise<LoadedDataSource[]> {
-  const options = pipelinePreludeOptions(context.config);
-  return loadControlDataSources(context, options);
+async function loadDataSources(
+  context: PipelineRunContext,
+  options: PipelinePreludeOptions,
+  recordInputs: PipelineRecordInputs,
+): Promise<LoadedDataSource[]> {
+  return loadControlDataSources(context, options, recordInputs);
 }
 
 async function loadControlDataSources(
   context: PipelineRunContext,
   options: PipelinePreludeOptions,
+  recordInputs: PipelineRecordInputs,
 ): Promise<LoadedDataSource[]> {
   const table = pipelinePreludeTableName(options);
   const { tenantId, env } = context.services.scope;
   const viewNamespace = `views_${tenantId}_${env}`;
 
-  let rows: Awaited<ReturnType<PipelineRunContext["services"]["controlPlane"]["businessTableRowsList"]>>;
-  try {
-    rows = await context.services.controlPlane.businessTableRowsList({
-      table,
-      include_deleted: false,
-    });
-  } catch (error) {
-    if (isMissingDataSourceControlTableError(error, table)) {
-      context.logger.warn("pipelinePrelude skipped env without configured data source control table", {
-        tenantId,
-        env,
-        namespace: viewNamespace,
+  let rows = recordInputs.get(table);
+  if (!rows) {
+    try {
+      rows = await context.services.controlPlane.businessTableRowsList({
         table,
-        reason: errorMessage(error),
+        include_deleted: false,
       });
-      return [];
+    } catch (error) {
+      if (isMissingDataSourceControlTableError(error, table)) {
+        context.logger.warn("pipelinePrelude skipped env without configured data source control table", {
+          tenantId,
+          env,
+          namespace: viewNamespace,
+          table,
+          reason: errorMessage(error),
+        });
+        return [];
+      }
+      throw error;
     }
-    throw error;
   }
   return rows.map((row) => ({
     tenantId,
@@ -530,12 +555,14 @@ interface KafkaSourceImportConfig {
 async function removeKafkaConnectorsMissingFromDataSources(
   context: PipelineRunContext,
   expected: readonly ExpectedKafkaSourceConnector[],
+  scopedKeys?: ReadonlySet<string>,
 ): Promise<void> {
   const expectedKeys = new Set(expected.map((entry) => entry.key));
   const connectors = await context.services.lakehouse.managerConnectorsList({ provider: "kafka" });
   const { tenantId, env } = context.services.scope;
   const orphaned = (connectors.kafka?.kafkaConnect.activeConfigs ?? []).filter((entry) =>
     isKafkaConnectorManagedByPipelinePrelude(entry, tenantId, env)
+    && (!scopedKeys || scopedKeys.has(entry.key))
     && !expectedKeys.has(entry.key));
   for (const connector of orphaned) {
     await context.services.lakehouse.managerConnectorRemove({

@@ -2,25 +2,81 @@
   "version": 1,
   "tables": [
     {
-      "label": "pipeline run history",
       "table": "t_factory_history_pipeline_runs",
-      "primaryKey": ["run_id"],
       "columns": {
-        "run_id": { "type": "string", "nullable": false },
-        "workspace_id": { "type": "string", "nullable": false },
-        "pipeline_key": { "type": "string", "nullable": false },
-        "pipeline_tag": { "type": "string", "nullable": false },
-        "entry_path": { "type": "string", "nullable": false },
-        "execution_mode": { "type": "string", "nullable": false },
-        "scope_key": { "type": "string", "nullable": false },
-        "scope_json": { "type": "json", "nullable": false },
-        "actor": { "type": "string", "nullable": false },
-        "status": { "type": "string", "nullable": false },
-        "started_at": { "type": "timestamptz", "nullable": false },
-        "finished_at": { "type": "timestamptz", "nullable": false },
-        "detail_json": { "type": "json", "nullable": false },
-        "error_message": { "type": "string", "nullable": true }
-      }
+        "run_id": {
+          "type": "string",
+          "nullable": false,
+          "description": "一次管道执行的稳定 UUID，也是追加历史记录的幂等键。"
+        },
+        "workspace_id": {
+          "type": "string",
+          "nullable": false,
+          "description": "发起执行的 Studio 工作区 ID。"
+        },
+        "pipeline_key": {
+          "type": "string",
+          "nullable": false,
+          "description": "管道装饰器声明的稳定 pipelineKey。"
+        },
+        "pipeline_tag": {
+          "type": "string",
+          "nullable": false,
+          "description": "管道装饰器声明的分类 tag。"
+        },
+        "entry_path": {
+          "type": "string",
+          "nullable": false,
+          "description": "本次执行加载的代码入口路径。"
+        },
+        "execution_mode": {
+          "type": "string",
+          "nullable": false,
+          "description": "执行范围模式：full 或 partial。"
+        },
+        "scope_key": {
+          "type": "string",
+          "nullable": false,
+          "description": "全量执行固定为 $all；局部执行使用调用方提供的稳定范围键。"
+        },
+        "scope_json": {
+          "type": "json",
+          "nullable": true,
+          "description": "局部执行范围的结构化补充信息。"
+        },
+        "actor": {
+          "type": "string",
+          "nullable": false,
+          "description": "执行来源：studio、scheduler 或 event。"
+        },
+        "status": {
+          "type": "string",
+          "nullable": false,
+          "description": "执行终态：succeeded、failed 或 cancelled。"
+        },
+        "started_at": {
+          "type": "timestamptz",
+          "nullable": false
+        },
+        "finished_at": {
+          "type": "timestamptz",
+          "nullable": false
+        },
+        "detail_json": {
+          "type": "json",
+          "nullable": false,
+          "description": "执行器或调用方提供的有限结构化结果明细。",
+          "default": {}
+        },
+        "error_message": {
+          "type": "string",
+          "nullable": true,
+          "description": "失败或取消时的截断错误信息。"
+        }
+      },
+      "primaryKey": [
+        "run_id"
+      ]
     }
   ]
 }

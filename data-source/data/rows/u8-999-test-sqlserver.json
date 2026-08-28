@@ -19,12 +19,10 @@
       },
       "pipeline_entries": {
         "configLoad": {
-          "codePath": "data-source/code/configLoad/index.ts",
-          "pipelineKey": "builtin_data_source_load"
+          "codePath": "data-source/code/configLoad/index.ts"
         },
         "materialLoad": {
-          "codePath": "data-source/code/materialLoad/index.ts",
-          "pipelineKey": "builtin_source_material_load"
+          "codePath": "data-source/code/sourceMaterial/index.ts"
         }
       }
     }
