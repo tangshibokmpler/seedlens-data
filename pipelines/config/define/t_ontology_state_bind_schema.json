@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "tables": [
+    {
+      "label": "ontology bind pipeline state",
+      "table": "t_ontology_state_bind",
+      "primaryKey": ["asset_name_key"],
+      "columns": {
+        "asset_name_key": { "type": "string", "nullable": false },
+        "heartbeat_lease_at": { "type": "timestamptz", "nullable": false },
+        "reconcile_status": { "type": "string", "nullable": true },
+        "status_updated_at": { "type": "timestamptz", "nullable": true },
+        "object_table_reconcile_state": { "type": "string", "nullable": false },
+        "data_reconcile_state": { "type": "string", "nullable": false }
+      }
+    }
+  ]
+}

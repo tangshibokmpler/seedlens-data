@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "tables": [
+    {
+      "label": "source material pipeline state",
+      "table": "t_factory_state_source_material",
+      "primaryKey": ["data_source_name_key"],
+      "columns": {
+        "data_source_name_key": { "type": "string", "nullable": false },
+        "heartbeat_lease_at": { "type": "timestamptz", "nullable": false },
+        "reconcile_status": { "type": "string", "nullable": true },
+        "status_updated_at": { "type": "timestamptz", "nullable": true },
+        "reconcile_state": { "type": "string", "nullable": false }
+      }
+    }
+  ]
+}

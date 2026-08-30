@@ -1,6 +1,16 @@
-import type { TenantBusinessTableManifest } from "@agentnexus/lakecore/model";
+import {
+  Pipeline,
+  type TenantBusinessTableManifest,
+} from "@agentnexus/lakecore/model";
 import schema from "./schema.json" with { type: "json" };
 import type { PipelineRunContext } from "./types.js";
+
+export class BuiltinPipelineStateSchemaPipeline {
+  @Pipeline({ tag: "pipelinePrelude", pipelineKey: "builtin_pipeline_state_schema" })
+  static Run(context: PipelineRunContext): Promise<void> {
+    return run(context);
+  }
+}
 
 /**
  * 功能：为当前租户环境一次性调谐所有 lakectd 状态管理表。

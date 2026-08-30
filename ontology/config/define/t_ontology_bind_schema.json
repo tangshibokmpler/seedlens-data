@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "tables": [
+    {
+      "label": "ontology bind config",
+      "kind": "control",
+      "columns": {
+        "object_table_name": {
+          "type": "string",
+          "nullable": false,
+          "description": "本体业务对象投影表名，由对象工作区策略生成。"
+        },
+        "data_asset_name": {
+          "type": "string",
+          "nullable": false,
+          "description": "引用 t_factory_config_pipeline.data_asset_name; 绑定管道使用此键查找由数据工厂管道创建的数据资产视图。"
+        },
+        "kind": {
+          "type": "string",
+          "nullable": false,
+          "description": "实现类型。允许值: builtin, custom。暂时只支持 builtin。"
+        },
+        "bind_code_key": {
+          "type": "string",
+          "nullable": false,
+          "description": "Lakectd 注册的本体绑定管道任务的键，用于执行此绑定配置。"
+        },
+        "bind_config": {
+          "type": "json",
+          "nullable": false,
+          "description": "数据资产视图到业务对象视图的绑定配置。不同类型和code_key 的绑定配置不同。"
+        }
+      },
+      "table": "t_ontology_config_bind",
+      "primaryKey": ["object_table_name"]
+    }
+  ]
+}

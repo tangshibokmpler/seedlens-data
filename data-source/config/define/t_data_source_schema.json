@@ -8,6 +8,11 @@
           "type": "string",
           "nullable": false
         },
+        "description": {
+          "type": "string",
+          "nullable": true,
+          "description": "数据源描述。"
+        },
         "kind": {
           "type": "string",
           "nullable": false
@@ -26,6 +31,12 @@
           "type": "json",
           "nullable": true,
           "description": "CDC source配置。PostgreSQL stream使用enabled、topicSuffix、tables与snapshotMode，topic固定为{tenant}.{env}.{suffix}."
+        },
+        "pipeline_entries": {
+          "type": "json",
+          "nullable": false,
+          "description": "数据源生命周期管道入口。configLoad负责连接器装载，materialLoad负责源原料加工；管道身份由codePath入口上的装饰器声明。",
+          "default": {}
         }
       },
       "primaryKey": [

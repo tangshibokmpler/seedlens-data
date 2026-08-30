@@ -4,6 +4,7 @@
   "rows": [
     {
       "name": "u8-999-test-sqlserver",
+      "description": "用友测试数据源",
       "kind": "builtin",
       "builtin_kind": "sqlserver",
       "connection": {
@@ -15,6 +16,14 @@
         "password": "SeedMode@2026!",
         "encrypt": true,
         "trustServerCertificate": true
+      },
+      "pipeline_entries": {
+        "configLoad": {
+          "codePath": "data-source/code/configLoad/index.ts"
+        },
+        "materialLoad": {
+          "codePath": "data-source/code/sourceMaterial/index.ts"
+        }
       }
     }
   ]
