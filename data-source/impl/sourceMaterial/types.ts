@@ -5,12 +5,9 @@ import type {
 type PipelineKey = string | number | boolean;
 type PipelineRow = Record<string, unknown>;
 
-export interface ConnectorActiveConfig {
-  key: string;
-  name: string;
-  connector?: string;
-  purpose?: string;
-  config: Record<string, unknown>;
+export interface TrinoActiveCatalog {
+  catalog: string;
+  connector: string;
 }
 
 interface PipelineServices {
@@ -21,9 +18,10 @@ interface PipelineServices {
   lakehouse: {
     managerConnectorsList(input?: {
       provider?: "trino";
+      includeRuntime?: boolean;
     }): Promise<{
       trino?: {
-        activeConfigs: readonly ConnectorActiveConfig[];
+        activeCatalogs?: readonly TrinoActiveCatalog[];
       };
     }>;
   };

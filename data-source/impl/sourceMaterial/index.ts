@@ -15,7 +15,7 @@ import {
   type SourceMaterialReconcileState,
   type SourceMaterialStateRow,
 } from "./state.js";
-import type { ConnectorActiveConfig, PipelineRunContext } from "./types.js";
+import type { PipelineRunContext, TrinoActiveCatalog } from "./types.js";
 
 type BuiltinSourceType = "pg" | "mysql" | "sqlserver";
 type ChangeType = "CREATED" | "UPDATED" | "DELETED";
@@ -131,8 +131,11 @@ export async function run(context: PipelineRunContext): Promise<void> {
   const states = await loadSourceMaterialStates(context, config.stateTable);
   const sources = await loadDataSources(context, config.sourceTable, recordInputs);
   const currentMaterials = await loadCurrentMaterials(context, config.materialTable);
-  const connectors = await context.services.lakehouse.managerConnectorsList({ provider: "trino" });
-  const activeCatalogs = connectors.trino?.activeConfigs ?? [];
+  const connectors = await context.services.lakehouse.managerConnectorsList({
+    provider: "trino",
+    includeRuntime: true,
+  });
+  const activeCatalogs = connectors.trino?.activeCatalogs ?? [];
 
   const stateBySource = uniqueMap(states, (state) => state.data_source_name_key, "source material state");
   const materialsBySource = groupBy(currentMaterials, (material) => material.dataSourceNameKey);
@@ -172,7 +175,7 @@ async function reconcileDataSourceMaterials(
   config: SourceMaterialLoadConfig,
   input: {
     source: DataSourceConfig;
-    activeCatalogs: readonly ConnectorActiveConfig[];
+    activeCatalogs: readonly TrinoActiveCatalog[];
     previousState?: SourceMaterialStateRow;
     currentMaterials: readonly CurrentMaterial[];
   },
@@ -436,7 +439,7 @@ async function scanSourceMaterials(
   context: PipelineRunContext,
   config: SourceMaterialLoadConfig,
   source: BuiltinDataSourceConfig,
-  catalog: ConnectorActiveConfig,
+  catalog: TrinoActiveCatalog,
 ): Promise<readonly ExpectedMaterial[]> {
   if (source.builtinKind === "sqlserver") {
     return scanSqlServerSourceMaterials(context, config, source, catalog);
@@ -448,7 +451,7 @@ async function scanSqlServerSourceMaterials(
   context: PipelineRunContext,
   config: SourceMaterialLoadConfig,
   source: BuiltinDataSourceConfig,
-  catalog: ConnectorActiveConfig,
+  catalog: TrinoActiveCatalog,
 ): Promise<readonly ExpectedMaterial[]> {
   const schema = sourceSchema(source);
   const nativeSql = [
@@ -521,15 +524,15 @@ async function scanSqlServerSourceMaterials(
   ].join("\n");
   const result = await context.services.dataPlane.dataEnvironmentSqlQuery({
     actor: context.actor,
-    catalog: catalog.name,
+    catalog: catalog.catalog,
     schema,
     max_pages: config.maxPages,
     sql: [
       "SELECT",
-      `  ${quoteSqlString(catalog.name)} AS table_catalog,`,
+      `  ${quoteSqlString(catalog.catalog)} AS table_catalog,`,
       "  metadata.batch_id,",
       "  to_base64(metadata.metadata_gzip) AS metadata_gzip_base64",
-      `FROM TABLE(${quoteTrinoIdentifier(catalog.name, "trino catalog")}.system.query(`,
+      `FROM TABLE(${quoteTrinoIdentifier(catalog.catalog, "trino catalog")}.system.query(`,
       `  query => ${quoteSqlString(nativeSql)}`,
       ")) AS metadata",
     ].join("\n"),
@@ -581,13 +584,13 @@ async function scanInformationSchemaSourceMaterials(
   context: PipelineRunContext,
   config: SourceMaterialLoadConfig,
   source: BuiltinDataSourceConfig,
-  catalog: ConnectorActiveConfig,
+  catalog: TrinoActiveCatalog,
 ): Promise<readonly ExpectedMaterial[]> {
   const schema = sourceSchema(source);
   const [tableResult, columnResult] = await Promise.all([
     context.services.dataPlane.dataEnvironmentSqlQuery({
       actor: context.actor,
-      catalog: catalog.name,
+      catalog: catalog.catalog,
       schema,
       max_pages: config.maxPages,
       sql: [
@@ -599,7 +602,7 @@ async function scanInformationSchemaSourceMaterials(
     }),
     context.services.dataPlane.dataEnvironmentSqlQuery({
       actor: context.actor,
-      catalog: catalog.name,
+      catalog: catalog.catalog,
       schema,
       max_pages: config.maxPages,
       sql: [
@@ -780,14 +783,14 @@ function requireBuiltinDataSource(source: DataSourceConfig): BuiltinDataSourceCo
 function activeCatalog(
   source: BuiltinDataSourceConfig,
   context: PipelineRunContext,
-  catalogs: readonly ConnectorActiveConfig[],
-): ConnectorActiveConfig {
+  catalogs: readonly TrinoActiveCatalog[],
+): TrinoActiveCatalog {
   const expected = externalCatalogName({
     tenantId: context.services.scope.tenantId,
     env: context.services.scope.env,
     sourceName: source.name,
   });
-  const catalog = catalogs.find((entry) => entry.key === expected || entry.name === expected);
+  const catalog = catalogs.find((entry) => entry.catalog === expected);
   if (!catalog) {
     throw new Error(`trino connector ${expected} for data source ${source.name} is not active; run data source load first`);
   }
