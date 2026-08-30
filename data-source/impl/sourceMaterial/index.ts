@@ -989,12 +989,12 @@ function catalogToken(value: string, label: string): string {
   const normalized = value
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9_]+/g, "_")
-    .replace(/^_+|_+$/g, "");
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
   if (!normalized) {
     throw new Error(`${label} must contain at least one catalog-safe character`);
   }
-  return /^[a-z]/.test(normalized) ? normalized : `${label}_${normalized}`;
+  return /^[a-z]/.test(normalized) ? normalized : `${label}-${normalized}`;
 }
 
 function tableIdentity(table: { catalog: string; schema: string; name: string }): string {
