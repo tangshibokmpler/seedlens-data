@@ -4,6 +4,7 @@
   "kind": "builtin",
   "name": "part_snapshot_physical",
   "pipeline_code_key": "builtin_physical_dataset",
+  "data_pipeline_code_key": "builtin_physical_table_data",
   "processing_config": {
     "field_mappings": [
       {

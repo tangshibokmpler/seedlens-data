@@ -4,6 +4,7 @@
   "target_asset_type": "physical",
   "kind": "builtin",
   "pipeline_code_key": "builtin_physical_dataset",
+  "data_pipeline_code_key": "builtin_physical_table_data",
   "data_asset_name": "ds_part_snapshot",
   "trigger": {
     "kind": "cdc"

@@ -6,8 +6,6 @@ import type {
 } from "@agentnexus/lakecore/model";
 import {
   Pipeline,
-  isModelDecimalType,
-  normalizeModelDecimalValue,
   resolveSourceColumnType,
 } from "@agentnexus/lakecore/model";
 import {
@@ -28,7 +26,7 @@ type TargetAssetType = "physical";
 type BuiltinDataSourceKind = "pg" | "mysql" | "sqlserver";
 type ImplementationKind = "builtin" | "custom";
 
-interface DataFactoryConfig {
+export interface DataFactoryConfig {
   pipelineTable: string;
   dataSourceTable: string;
   stateTable: string;
@@ -55,17 +53,18 @@ interface BusinessSchemasMutationResult {
   }[];
 }
 
-interface PipelineConfigRow {
+export interface PipelineConfigRow {
   name: string;
   data_source_key: string;
   target_asset_type: string;
   kind: ImplementationKind;
   pipeline_code_key: string;
+  data_pipeline_code_key?: string;
   trigger?: Record<string, unknown>;
   processing_config: Record<string, unknown>;
 }
 
-interface BuiltinDataSource {
+export interface BuiltinDataSource {
   name: string;
   kind: "builtin";
   builtin_kind: BuiltinDataSourceKind;
@@ -78,13 +77,13 @@ interface BuiltinDataSource {
   stream?: Record<string, unknown>;
 }
 
-interface FieldMapping {
+export interface FieldMapping {
   sourceField: string;
   targetField: string;
   targetType?: "string";
 }
 
-interface BuiltinProcessingConfig {
+export interface BuiltinProcessingConfig {
   source: {
     table: string;
     schema?: string;
@@ -96,7 +95,7 @@ interface BuiltinProcessingConfig {
   fieldMappings: readonly FieldMapping[];
 }
 
-interface MatchedPipelineConfig {
+export interface MatchedPipelineConfig {
   name: string;
   dataSourceKey: string;
   trigger?: Record<string, unknown>;
@@ -105,33 +104,17 @@ interface MatchedPipelineConfig {
 
 type DataFactoryContext = PipelineRunContext;
 
-interface SourceRef {
+export interface SourceRef {
   catalog: string;
   schema: string;
   table: string;
   qualified: string;
 }
 
-interface SourceColumnInfo {
+export interface SourceColumnInfo {
   name: string;
   type: string;
   nullable: boolean;
-}
-
-type DatasetRow = Record<string, unknown>;
-
-interface PhysicalDatasetSyncSummary {
-  sourceRows: number;
-  targetRows: number;
-  inserted: number;
-  updated: number;
-  deleted: number;
-  unchanged: number;
-}
-
-interface KeyedDatasetRow {
-  key: string | number | boolean;
-  row: DatasetRow;
 }
 
 const DEFAULT_SOURCE_SCHEMA = "public";
@@ -145,9 +128,9 @@ export class BuiltinPhysicalDatasetPipeline {
 }
 
 /**
- * 功能：根据数据加工配置把外部源表物化为物理数据集。
- * 逻辑：默认读取完整配置和源定义；config.recordInputs 非空时只消费指定 pipeline 与数据源记录，每次按业务主键拉齐数据内容。
- * 幂等：采用 reconcile/preserve 策略；定向模式不清理其他配置状态，结构成功和数据成功分别记录，失败写入原因并续租。
+ * 功能：根据数据加工配置投影源表结构，并创建或调谐物理数据集表。
+ * 逻辑：默认读取完整配置和源定义；config.recordInputs 非空时只消费指定 pipeline 与数据源记录。本 pipeline 不导入业务数据。
+ * 幂等：采用 reconcile/preserve 策略；定向模式不清理其他配置状态，只维护 table_reconcile_state。
  */
 export async function run(context: PipelineRunContext): Promise<void> {
   assertConcreteTarget(context);
@@ -192,13 +175,20 @@ export async function run(context: PipelineRunContext): Promise<void> {
       sourceColumns = await loadSourceColumns(context, source);
       assertSourceMappingsExist(configRow, sourceColumns);
     } catch (error) {
+      const previous = await loadTablePipelineState(
+        context,
+        config.stateTable,
+        configRow.name,
+      );
       const failed = reconcileStateValue("failed", stateHash({ config: configRow }), error);
+      const dataState = previous?.data_reconcile_state
+        ?? reconcileStateValue("pending", stateHash({ config: configRow }));
       await writeTablePipelineState(context, {
         table: config.stateTable,
         key: configRow.name,
         leaseMs: context.heartbeatLeaseMs,
         tableState: failed,
-        dataState: failed,
+        dataState,
         success: false,
       });
       context.logger.warn("physical dataset source resolution failed", {
@@ -207,7 +197,7 @@ export async function run(context: PipelineRunContext): Promise<void> {
       });
       continue;
     }
-    await reconcilePhysicalDataset(
+    await reconcilePhysicalDatasetDefinition(
       context,
       configRow,
       source,
@@ -238,7 +228,7 @@ function assertConcreteTarget(context: DataFactoryContext): void {
   }
 }
 
-function dataFactoryConfig(config: unknown): DataFactoryConfig {
+export function dataFactoryConfig(config: unknown): DataFactoryConfig {
   if (!config || typeof config !== "object" || Array.isArray(config)) {
     throw new Error("builtin physical dataset requires pipelineTable and dataSourceTable config");
   }
@@ -256,7 +246,7 @@ function dataFactoryConfig(config: unknown): DataFactoryConfig {
   };
 }
 
-async function loadPipelineConfigRows(
+export async function loadPipelineConfigRows(
   context: DataFactoryContext,
   table: string,
   recordInputs: PipelineRecordInputs,
@@ -265,7 +255,7 @@ async function loadPipelineConfigRows(
   return rows.map((row, index) => pipelineConfigRow(row, index));
 }
 
-async function loadDataSources(
+export async function loadDataSources(
   context: DataFactoryContext,
   table: string,
   recordInputs: PipelineRecordInputs,
@@ -319,11 +309,22 @@ function pipelineConfigRow(row: Record<string, unknown>, index: number): Pipelin
   const targetAssetType = textField(row, "target_asset_type");
   const implementationKind = textField(row, "kind");
   const pipelineCodeKey = textField(row, "pipeline_code_key");
+  const dataPipelineCodeKey = textField(row, "data_pipeline_code_key");
   if (!name || !dataSourceKey || !targetAssetType || !implementationKind || !pipelineCodeKey) {
     throw new Error(`pipeline config row[${index}] requires name, data_source_key, target_asset_type, kind, and pipeline_code_key`);
   }
   if (implementationKind !== "builtin" && implementationKind !== "custom") {
     throw new Error(`pipeline config row[${index}].kind must be builtin or custom`);
+  }
+  if (targetAssetType === "physical" && !dataPipelineCodeKey) {
+    throw new Error(
+      `pipeline config row[${index}] physical asset requires data_pipeline_code_key`,
+    );
+  }
+  if (targetAssetType === "virtual" && dataPipelineCodeKey) {
+    throw new Error(
+      `pipeline config row[${index}] virtual asset must not define data_pipeline_code_key`,
+    );
   }
   return {
     name,
@@ -331,6 +332,7 @@ function pipelineConfigRow(row: Record<string, unknown>, index: number): Pipelin
     target_asset_type: targetAssetType,
     kind: implementationKind,
     pipeline_code_key: pipelineCodeKey,
+    ...(dataPipelineCodeKey ? { data_pipeline_code_key: dataPipelineCodeKey } : {}),
     trigger: jsonObjectFieldOptional(row.trigger, `pipeline config ${name}.trigger`),
     processing_config: jsonObjectField(row.processing_config, `pipeline config ${name}.processing_config`),
   };
@@ -375,6 +377,23 @@ function matchedPipelineConfigs(
     .filter((row) =>
       row.kind === "builtin"
       && row.pipeline_code_key === context.pipelineKey
+      && row.target_asset_type === TARGET_ASSET_TYPE)
+    .map((row) => ({
+      name: row.name,
+      dataSourceKey: row.data_source_key,
+      trigger: row.trigger,
+      processing: normalizeProcessingConfig(row),
+    }));
+}
+
+export function matchedPhysicalDataConfigs(
+  context: DataFactoryContext,
+  rows: readonly PipelineConfigRow[],
+): readonly MatchedPipelineConfig[] {
+  return rows
+    .filter((row) =>
+      row.kind === "builtin"
+      && row.data_pipeline_code_key === context.pipelineKey
       && row.target_asset_type === TARGET_ASSET_TYPE)
     .map((row) => ({
       name: row.name,
@@ -448,7 +467,7 @@ function fieldMapping(entry: unknown, configName: string, index: number): FieldM
   };
 }
 
-async function resolveSourceRef(
+export async function resolveSourceRef(
   context: PipelineRunContext,
   dataSource: BuiltinDataSource,
   processing: BuiltinProcessingConfig,
@@ -477,7 +496,7 @@ async function resolveSourceRef(
   };
 }
 
-async function loadSourceColumns(
+export async function loadSourceColumns(
   context: PipelineRunContext,
   source: SourceRef,
 ): Promise<readonly SourceColumnInfo[]> {
@@ -505,7 +524,7 @@ async function loadSourceColumns(
   return columns;
 }
 
-function assertSourceMappingsExist(
+export function assertSourceMappingsExist(
   config: MatchedPipelineConfig,
   sourceColumns: readonly SourceColumnInfo[],
 ): void {
@@ -517,7 +536,7 @@ function assertSourceMappingsExist(
   }
 }
 
-async function reconcilePhysicalDataset(
+async function reconcilePhysicalDatasetDefinition(
   context: PipelineRunContext,
   config: MatchedPipelineConfig,
   source: SourceRef,
@@ -525,14 +544,26 @@ async function reconcilePhysicalDataset(
   stateTable: string,
   leaseMs: number,
 ): Promise<void> {
-  const expectedHash = stateHash({ config, source, sourceColumns });
+  const expectedHash = physicalDatasetStateHash(config, source, sourceColumns);
   const previous = await loadTablePipelineState(context, stateTable, config.name);
   let tableState = previous?.table_reconcile_state ?? reconcileStateValue("pending", expectedHash);
-  let dataState = reconcileStateValue("pending", expectedHash);
+  const dataState = previous?.data_reconcile_state?.expected_hash === expectedHash
+    ? previous.data_reconcile_state
+    : reconcileStateValue("pending", expectedHash);
   const tableReady = tableReconcileLeaseReady(previous, expectedHash);
-  if (!tableReady) {
-    tableState = reconcileStateValue("pending", expectedHash);
+  if (tableReady) {
+    await writeTablePipelineState(context, {
+      table: stateTable,
+      key: config.name,
+      leaseMs,
+      tableState,
+      dataState,
+      success: dataState.status === "ready",
+    });
+    return;
   }
+
+  tableState = reconcileStateValue("pending", expectedHash);
   await writeTablePipelineState(context, {
     table: stateTable,
     key: config.name,
@@ -542,62 +573,36 @@ async function reconcilePhysicalDataset(
     success: false,
   });
 
-  if (!tableReady) {
-    try {
-      const provision = await context.services.controlPlane.businessSchemasReconcile({
-        schema: businessSchemaManifestFor(config, sourceColumns),
-        actor: context.actor,
-      });
-      const tableSummary = dataPlaneTableSummary(provision, context.services.scope.env, config.processing.target.assetTable);
-      const rootAction = businessSchemaAction(provision, config.processing.target.assetTable);
-      tableState = reconcileStateValue("ready", expectedHash);
-      if (rootAction !== "unchanged" || tableSummary.changed) {
-        context.logger.info("physical dataset table changed", {
-          config: config.name,
-          rootTable: rootAction,
-          envTable: tableSummary.table_action,
-          view: tableSummary.view_action,
-        });
-      }
-    } catch (error) {
-      tableState = reconcileStateValue("failed", expectedHash, error);
-      await writeTablePipelineState(context, {
-        table: stateTable,
-        key: config.name,
-        leaseMs,
-        tableState,
-        dataState,
-        success: false,
-      });
-      context.logger.warn("physical dataset table reconcile failed", {
-        config: config.name,
-        error: errorMessage(error),
-      });
-      return;
-    }
-  }
-
   try {
-    const sync = await syncPhysicalDatasetRows(context, config, source, sourceColumns);
-    dataState = reconcileStateValue("ready", expectedHash);
+    const provision = await context.services.controlPlane.businessSchemasReconcile({
+      schema: businessSchemaManifestFor(config, sourceColumns),
+      actor: context.actor,
+    });
+    const tableSummary = dataPlaneTableSummary(
+      provision,
+      context.services.scope.env,
+      config.processing.target.assetTable,
+    );
+    const rootAction = businessSchemaAction(provision, config.processing.target.assetTable);
+    tableState = reconcileStateValue("ready", expectedHash);
     await writeTablePipelineState(context, {
       table: stateTable,
       key: config.name,
       leaseMs,
       tableState,
       dataState,
-      success: true,
+      success: dataState.status === "ready",
     });
-    if (sync.inserted + sync.updated + sync.deleted > 0) {
-      context.logger.info("physical dataset data changed", {
+    if (rootAction !== "unchanged" || tableSummary.changed) {
+      context.logger.info("physical dataset table changed", {
         config: config.name,
-        inserted: sync.inserted,
-        updated: sync.updated,
-        deleted: sync.deleted,
+        rootTable: rootAction,
+        envTable: tableSummary.table_action,
+        view: tableSummary.view_action,
       });
     }
   } catch (error) {
-    dataState = reconcileStateValue("failed", expectedHash, error);
+    tableState = reconcileStateValue("failed", expectedHash, error);
     await writeTablePipelineState(context, {
       table: stateTable,
       key: config.name,
@@ -606,286 +611,46 @@ async function reconcilePhysicalDataset(
       dataState,
       success: false,
     });
-    context.logger.warn("physical dataset data reconcile failed", {
+    context.logger.warn("physical dataset table reconcile failed", {
       config: config.name,
       error: errorMessage(error),
     });
   }
 }
 
-async function syncPhysicalDatasetRows(
-  context: PipelineRunContext,
+export function physicalDatasetStateHash(
   config: MatchedPipelineConfig,
   source: SourceRef,
   sourceColumns: readonly SourceColumnInfo[],
-): Promise<PhysicalDatasetSyncSummary> {
-  const [sourceRows, targetRows] = await Promise.all([
-    loadSourceDatasetRows(context, config, source, sourceColumns),
-    loadTargetDatasetRows(context, config),
-  ]);
-  const primaryKey = config.processing.target.primaryKey[0]!;
-  const fieldTypes = targetFieldTypes(config, sourceColumns);
-  const sourceByKey = rowsByPrimaryKey(config.name, "source", primaryKey, sourceRows, fieldTypes);
-  const targetByKey = rowsByPrimaryKey(config.name, "target", primaryKey, targetRows, fieldTypes);
-  const fields = config.processing.fieldMappings.map((mapping) => mapping.targetField);
-  const summary: PhysicalDatasetSyncSummary = {
-    sourceRows: sourceRows.length,
-    targetRows: targetRows.length,
-    inserted: 0,
-    updated: 0,
-    deleted: 0,
-    unchanged: 0,
-  };
-
-  for (const [keyToken, sourceEntry] of sourceByKey) {
-    const targetEntry = targetByKey.get(keyToken);
-    if (!targetEntry) {
-      await context.services.dataPlane.dataTableRowWrite({
-        actor: context.actor,
-        table: config.processing.target.assetTable,
-        operation: "insert",
-        record: sourceEntry.row,
-      });
-      summary.inserted += 1;
-      continue;
-    }
-    if (sameDatasetRow(sourceEntry.row, targetEntry.row, fields, fieldTypes)) {
-      summary.unchanged += 1;
-      continue;
-    }
-    await context.services.dataPlane.dataTableRowWrite({
-      actor: context.actor,
-      table: config.processing.target.assetTable,
-      operation: "update",
-      key: sourceEntry.key,
-      record: sourceEntry.row,
-    });
-    summary.updated += 1;
-  }
-
-  for (const [keyToken, targetEntry] of targetByKey) {
-    if (sourceByKey.has(keyToken)) {
-      continue;
-    }
-    await context.services.dataPlane.dataTableRowWrite({
-      actor: context.actor,
-      table: config.processing.target.assetTable,
-      operation: "delete",
-      key: targetEntry.key,
-      record: {
-        [primaryKey]: targetEntry.key,
-      },
-    });
-    summary.deleted += 1;
-  }
-
-  return summary;
-}
-
-async function loadSourceDatasetRows(
-  context: PipelineRunContext,
-  config: MatchedPipelineConfig,
-  source: SourceRef,
-  sourceColumns: readonly SourceColumnInfo[],
-): Promise<readonly DatasetRow[]> {
-  const targetFields = config.processing.fieldMappings.map((mapping) => mapping.targetField);
-  const sourceColumnsByName = new Map(sourceColumns.map((column) => [column.name.toLowerCase(), column]));
-  const selectList = config.processing.fieldMappings
-    .map((mapping) => {
-      const column = sourceColumnsByName.get(mapping.sourceField.toLowerCase());
-      if (!column) {
-        throw new Error(`pipeline config ${config.name} references missing source column ${mapping.sourceField}`);
-      }
-      const sourceField = quoteTrinoIdentifier(mapping.sourceField, "source column");
-      const castType = mappedSourceColumnType(column.type, mapping.targetType).trinoViewCastType;
-      const expression = castType ? `CAST(${sourceField} AS ${castType})` : sourceField;
-      return `${expression} AS ${quoteTrinoIdentifier(mapping.targetField, "target column")}`;
-    })
-    .join(", ");
-  const result = await context.services.dataPlane.dataEnvironmentSqlQuery({
-    actor: context.actor,
-    catalog: source.catalog,
-    schema: source.schema,
-    max_pages: 1_000,
-    sql: `SELECT ${selectList} FROM ${source.qualified}`,
+): string {
+  return stateHash({
+    name: config.name,
+    dataSourceKey: config.dataSourceKey,
+    processing: config.processing,
+    source,
+    sourceColumns,
   });
-  return result.rows.map((row) => rowFromValues(targetFields, row));
 }
 
-async function loadTargetDatasetRows(
-  context: PipelineRunContext,
-  config: MatchedPipelineConfig,
-): Promise<readonly DatasetRow[]> {
-  const targetFields = config.processing.fieldMappings.map((mapping) => mapping.targetField);
-  const selectList = targetFields
-    .map((field) => quoteTrinoIdentifier(field, "target column"))
-    .join(", ");
-  const result = await context.services.dataPlane.dataEnvironmentSqlQuery({
-    actor: context.actor,
-    max_pages: 1_000,
-    sql: `SELECT ${selectList} FROM ${quoteTrinoIdentifier(config.processing.target.assetTable, "target table")}`,
-  });
-  return result.rows.map((row) => rowFromValues(targetFields, row));
-}
-
-function rowFromValues(fields: readonly string[], values: readonly unknown[]): DatasetRow {
-  const row: DatasetRow = {};
-  for (const [index, field] of fields.entries()) {
-    row[field] = values[index] ?? null;
-  }
-  return row;
-}
-
-function rowsByPrimaryKey(
-  configName: string,
-  label: "source" | "target",
-  primaryKey: string,
-  rows: readonly DatasetRow[],
-  fieldTypes: ReadonlyMap<string, string>,
-): Map<string, KeyedDatasetRow> {
-  const byKey = new Map<string, KeyedDatasetRow>();
-  const keyType = fieldTypes.get(primaryKey);
-  for (const row of rows) {
-    const key = primaryKeyValue(configName, label, primaryKey, row);
-    const keyToken = stableKeyToken(key, keyType);
-    if (byKey.has(keyToken)) {
-      throw new Error(`pipeline config ${configName} loaded duplicate ${label} primary key ${String(key)}`);
-    }
-    byKey.set(keyToken, {
-      key,
-      row,
-    });
-  }
-  return byKey;
-}
-
-function primaryKeyValue(
-  configName: string,
-  label: "source" | "target",
-  primaryKey: string,
-  row: DatasetRow,
-): string | number | boolean {
-  const value = row[primaryKey];
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
-    return value;
-  }
-  throw new Error(`pipeline config ${configName} loaded ${label} row without scalar primary key ${primaryKey}`);
-}
-
-function stableKeyToken(value: string | number | boolean, type: string | undefined): string {
-  return JSON.stringify(normalizeComparableValue(value, type));
-}
-
-function sameDatasetRow(
-  source: DatasetRow,
-  target: DatasetRow,
-  fields: readonly string[],
-  fieldTypes: ReadonlyMap<string, string>,
-): boolean {
-  return fields.every((field) =>
-    stableComparableJson(source[field], fieldTypes.get(field))
-      === stableComparableJson(target[field], fieldTypes.get(field)));
-}
-
-function stableComparableJson(value: unknown, type: string | undefined): string {
-  return JSON.stringify(stableValue(normalizeComparableValue(value, type)));
-}
-
-function normalizeComparableValue(value: unknown, type: string | undefined): unknown {
-  if (value === undefined || value === null) {
-    return null;
-  }
-  if (value instanceof Date) {
-    return type === "date" ? value.toISOString().slice(0, 10) : value.toISOString();
-  }
-  if (type && isModelDecimalType(type)) {
-    return normalizeModelDecimalValue(value, type);
-  }
-
-  switch (type) {
-    case "integer":
-    case "int":
-    case "long":
-    case "float":
-    case "double":
-    {
-      const numeric = typeof value === "number" ? value : Number(value);
-      return Number.isFinite(numeric) ? numeric : String(value);
-    }
-    case "boolean": {
-      if (typeof value === "boolean") {
-        return value;
-      }
-      if (typeof value === "string") {
-        const normalized = value.trim().toLowerCase();
-        if (["true", "1", "yes", "on"].includes(normalized)) {
-          return true;
-        }
-        if (["false", "0", "no", "off"].includes(normalized)) {
-          return false;
-        }
-      }
-      return value;
-    }
-    case "date":
-    case "timestamp":
-    case "timestamptz": {
-      if (typeof value === "string" || typeof value === "number") {
-        const parsed = new Date(value);
-        if (!Number.isNaN(parsed.getTime())) {
-          return type === "date" ? parsed.toISOString().slice(0, 10) : parsed.toISOString();
-        }
-      }
-      return String(value);
-    }
-    case "json":
-    case "jsonb":
-      if (typeof value === "string") {
-        try {
-          return JSON.parse(value) as unknown;
-        } catch {
-          return value;
-        }
-      }
-      return value;
-    default:
-      return String(value);
-  }
+export function stateHash(value: unknown): string {
+  return createHash("sha256")
+    .update(JSON.stringify(stableValue(value)))
+    .digest("hex");
 }
 
 function stableValue(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map((entry) => stableValue(entry));
   }
-  if (!value || typeof value !== "object" || value instanceof Date) {
+  if (!value || typeof value !== "object") {
     return value;
   }
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([key, entry]) => [key, stableValue(entry)]),
   );
-}
-
-function stateHash(value: unknown): string {
-  return createHash("sha256")
-    .update(JSON.stringify(stableValue(value)))
-    .digest("hex");
-}
-
-function targetFieldTypes(
-  config: MatchedPipelineConfig,
-  sourceColumns: readonly SourceColumnInfo[],
-): Map<string, string> {
-  const sourceColumnsByName = new Map(sourceColumns.map((column) => [column.name.toLowerCase(), column]));
-  const fieldTypes = new Map<string, string>();
-  for (const mapping of config.processing.fieldMappings) {
-    const sourceColumn = sourceColumnsByName.get(mapping.sourceField.toLowerCase());
-    if (sourceColumn) {
-      fieldTypes.set(mapping.targetField, manifestColumnType(sourceColumn.type, mapping.targetType));
-    }
-  }
-  return fieldTypes;
 }
 
 function dataPlaneTableSummary(
@@ -945,7 +710,7 @@ function manifestColumnType(type: string, targetType?: "string"): string {
   return mappedSourceColumnType(type, targetType).modelType;
 }
 
-function mappedSourceColumnType(type: string, targetType?: "string") {
+export function mappedSourceColumnType(type: string, targetType?: "string") {
   const resolved = resolveSourceColumnType(type, {
     highPrecisionDecimal: targetType === "string" ? "string" : "reject",
   });
@@ -954,7 +719,7 @@ function mappedSourceColumnType(type: string, targetType?: "string") {
     : resolved;
 }
 
-function quoteTrinoIdentifier(value: string, label = "trino identifier"): string {
+export function quoteTrinoIdentifier(value: string, label = "trino identifier"): string {
   const normalized = requireNonEmpty(value, label);
   return `"${normalized.replace(/"/g, "\"\"")}"`;
 }
@@ -1030,7 +795,7 @@ function isMissingTableError(error: unknown, table: string): boolean {
   );
 }
 
-function errorMessage(error: unknown): string {
+export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 

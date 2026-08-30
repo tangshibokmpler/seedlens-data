@@ -3,7 +3,6 @@
   "tables": [
     {
       "label": "ontology bind config",
-      "kind": "control",
       "columns": {
         "object_table_name": {
           "type": "string",

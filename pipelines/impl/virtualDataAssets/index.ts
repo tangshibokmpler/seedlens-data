@@ -32,6 +32,7 @@ interface PipelineConfigRow {
   target_asset_type: string;
   kind: ImplementationKind;
   pipeline_code_key: string;
+  data_pipeline_code_key?: string;
   processing_config: Record<string, unknown>;
 }
 
@@ -269,11 +270,22 @@ function pipelineConfigRow(row: Record<string, unknown>, index: number): Pipelin
   const targetAssetType = textField(row, "target_asset_type");
   const implementationKind = textField(row, "kind");
   const pipelineCodeKey = textField(row, "pipeline_code_key");
+  const dataPipelineCodeKey = textField(row, "data_pipeline_code_key");
   if (!name || !dataSourceKey || !targetAssetType || !implementationKind || !pipelineCodeKey) {
     throw new Error(`pipeline config row[${index}] requires name, data_source_key, target_asset_type, kind, and pipeline_code_key`);
   }
   if (implementationKind !== "builtin" && implementationKind !== "custom") {
     throw new Error(`pipeline config row[${index}].kind must be builtin or custom`);
+  }
+  if (targetAssetType === "physical" && !dataPipelineCodeKey) {
+    throw new Error(
+      `pipeline config row[${index}] physical asset requires data_pipeline_code_key`,
+    );
+  }
+  if (targetAssetType === "virtual" && dataPipelineCodeKey) {
+    throw new Error(
+      `pipeline config row[${index}] virtual asset must not define data_pipeline_code_key`,
+    );
   }
   return {
     name,
@@ -281,6 +293,7 @@ function pipelineConfigRow(row: Record<string, unknown>, index: number): Pipelin
     target_asset_type: targetAssetType,
     kind: implementationKind,
     pipeline_code_key: pipelineCodeKey,
+    ...(dataPipelineCodeKey ? { data_pipeline_code_key: dataPipelineCodeKey } : {}),
     processing_config: jsonObjectField(row.processing_config, `pipeline config ${name}.processing_config`),
   };
 }

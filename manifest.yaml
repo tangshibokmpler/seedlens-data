@@ -1,54 +1,27 @@
 apiVersion: seedlens.data/v1
 
-tables:
-  - table: t_system_config_canvas_stage
-    plane: control
-    schema: canvas/config/impl/t_canvas_stage_schema.json
-    rows:
-      - canvas/config/config/default-canvas-stages.json
+schemas:
+  - kind: control
+    path: canvas/config/impl/t_canvas_stage_schema.json
 
-  - table: t_factory_config_source
-    plane: control
-    schema: data-source/config/define/t_data_source_schema.json
-    rows:
-      - data-source/config/configs/u8-999-test-sqlserver.json
+  - kind: control
+    path: data-source/config/define/t_data_source_schema.json
 
-  - table: t_factory_config_source_materials
-    plane: data_versioned
-    schema: data-source/config/define/t_source_materials_schema.json
+  - kind: data_versioned
+    path: data-source/config/define/t_source_materials_schema.json
 
-  - table: t_factory_config_pipeline
-    plane: control
-    schema: pipelines/config/define/t_pipeline_schema.json
+  - kind: control
+    path: pipelines/config/define/t_pipeline_schema.json
 
-  - table: t_ontology_config_bind
-    plane: control
-    schema: ontology/config/define/t_ontology_bind_schema.json
+  - kind: control
+    path: ontology/config/define/t_ontology_bind_schema.json
 
-  - table: t_global_state_views
-    plane: data_unversioned
-    schema: pipelines/config/define/t_global_state_views_schema.json
+  - kind: data_unversioned
+    path: canvas/impl/stateTable/schema.json
 
-  - table: t_factory_state_source
-    plane: data_unversioned
-    schema: pipelines/config/define/t_factory_state_source_schema.json
+  - kind: data_unversioned
+    path: pipelines/config/define/t_pipeline_run_history_schema.json
 
-  - table: t_factory_state_source_material
-    plane: data_unversioned
-    schema: pipelines/config/define/t_factory_state_source_material_schema.json
-
-  - table: t_factory_state_asset
-    plane: data_unversioned
-    schema: pipelines/config/define/t_factory_state_asset_schema.json
-
-  - table: t_ontology_state_bind
-    plane: data_unversioned
-    schema: pipelines/config/define/t_ontology_state_bind_schema.json
-
-  - table: t_system_state_overview
-    plane: data_unversioned
-    schema: pipelines/config/define/t_system_state_overview_schema.json
-
-  - table: t_factory_history_pipeline_runs
-    plane: data_unversioned
-    schema: pipelines/config/define/t_pipeline_run_history_schema.json
+data:
+  - path: canvas/config/config/default-canvas-stages.json
+  - path: data-source/config/configs/u8-999-test-sqlserver.json

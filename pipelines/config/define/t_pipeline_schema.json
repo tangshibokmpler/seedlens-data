@@ -27,7 +27,12 @@
         "pipeline_code_key": {
           "type": "string",
           "nullable": false,
-          "description": "Lakectd 注册的 pipelineKey, 用于执行此 pipeline 配置"
+          "description": "Lakectd 注册的投影与表定义 pipelineKey, 用于创建或调谐目标资产"
+        },
+        "data_pipeline_code_key": {
+          "type": "string",
+          "nullable": true,
+          "description": "物理表数据导入 pipelineKey。virtual 资产必须为空，physical 资产由该 pipeline 在表定义 ready 后导入数据"
         },
         "data_asset_name": {
           "type": "string",
