@@ -17,7 +17,22 @@ schemas:
     path: ontology/config/define/t_ontology_bind_schema.json
 
   - kind: data_unversioned
-    path: canvas/impl/stateTable/schema.json
+    path: pipelines/config/define/t_factory_state_asset_schema.json
+
+  - kind: data_unversioned
+    path: pipelines/config/define/t_factory_state_source_material_schema.json
+
+  - kind: data_unversioned
+    path: pipelines/config/define/t_factory_state_source_schema.json
+
+  - kind: data_unversioned
+    path: pipelines/config/define/t_global_state_views_schema.json
+
+  - kind: data_unversioned
+    path: pipelines/config/define/t_ontology_state_bind_schema.json
+
+  - kind: data_unversioned
+    path: pipelines/config/define/t_system_state_overview_schema.json
 
   - kind: data_unversioned
     path: pipelines/config/define/t_pipeline_run_history_schema.json
