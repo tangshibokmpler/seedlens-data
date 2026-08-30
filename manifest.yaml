@@ -2,7 +2,7 @@ apiVersion: seedlens.data/v1
 
 schemas:
   - kind: control
-    path: canvas/config/impl/t_canvas_stage_schema.json
+    path: canvas/config/define/t_canvas_stage_schema.json
 
   - kind: control
     path: data-source/config/define/t_data_source_schema.json
