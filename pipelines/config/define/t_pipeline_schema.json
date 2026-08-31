@@ -17,6 +17,7 @@
         "purpose": {
           "type": "string",
           "nullable": false,
+          "default": "physical_ingestion",
           "description": "配置职责。允许值: physical_ingestion, virtual_projection；前者可执行送数，后者只在虚拟资产初始化时调协 View。"
         },
         "kind": {
