@@ -14,6 +14,11 @@
           "nullable": false,
           "description": "数据源名称, 引用 t_factory_config_source.name."
         },
+        "purpose": {
+          "type": "string",
+          "nullable": false,
+          "description": "配置职责。允许值: physical_ingestion, virtual_projection；前者可执行送数，后者只在虚拟资产初始化时调协 View。"
+        },
         "kind": {
           "type": "string",
           "nullable": false,
@@ -22,7 +27,7 @@
         "pipeline_code_key": {
           "type": "string",
           "nullable": false,
-          "description": "Lakectd 注册的数据加工 pipelineKey。管道只负责向 data_asset_name 指向的既有资产送数，不创建或修改资产定义。"
+          "description": "实现标识。physical_ingestion 对应 Lakectd pipelineKey；virtual_projection 第一版固定为 builtin_virtual_projection，且不可运行。"
         },
         "data_asset_name": {
           "type": "string",
@@ -37,7 +42,7 @@
         "processing_config": {
           "type": "json",
           "nullable": false,
-          "description": "源到资产的数据加工配置。内置实现期望 source.schema、source.table 和 field_mappings；目标表名、类型、schema 和主键统一从 t_factory_config_asset 解析。"
+          "description": "源到资产的映射配置。两种 purpose 均使用 source.schema、source.table 和 field_mappings；物理管道据此送数，虚拟投影据此创建 View。"
         }
       },
       "primaryKey": [

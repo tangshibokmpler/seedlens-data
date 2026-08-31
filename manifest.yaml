@@ -29,6 +29,9 @@ schemas:
     path: data-asset/config/define/t_factory_state_asset.json
 
   - kind: data_unversioned
+    path: data-asset/config/define/t_factory_asset_reconcile_history.json
+
+  - kind: data_unversioned
     path: pipelines/config/define/t_global_state_views_schema.json
 
   - kind: data_unversioned

@@ -93,11 +93,6 @@
           }
         ]
       },
-      "kind": "builtin",
-      "pipeline_entry": {
-        "pipelineKey": "builtin_physical_dataset",
-        "codePath": "data-asset/impl/physicalDataAssets/index.ts"
-      },
       "metadata": {}
     }
   ]

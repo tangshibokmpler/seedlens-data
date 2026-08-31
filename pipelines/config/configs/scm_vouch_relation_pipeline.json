@@ -5,6 +5,7 @@
     {
       "name": "scm_vouch_relation_ingestion",
       "data_source_key": "u8-999-test-sqlserver",
+      "purpose": "physical_ingestion",
       "kind": "builtin",
       "pipeline_code_key": "builtin_physical_table_data",
       "data_asset_name": "t_factory_asset_scm_vouch_relation",

@@ -40,16 +40,6 @@
           "nullable": false,
           "description": "由原资产 schema 定义整体转换得到的 JSON，保留 version、tables、label、table、columns 和 primaryKey。"
         },
-        "kind": {
-          "type": "string",
-          "nullable": false,
-          "description": "调谐实现类型。允许值: builtin, custom。"
-        },
-        "pipeline_entry": {
-          "type": "json",
-          "nullable": false,
-          "description": "资产调谐管道入口，包含 pipelineKey 与 codePath。physical 指向物理表 schema 调谐实现，virtual 指向虚拟视图调谐实现。"
-        },
         "metadata": {
           "type": "json",
           "nullable": false,

@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "tables": [
+    {
+      "label": "data asset reconcile history",
+      "table": "t_factory_history_asset_reconciles",
+      "primaryKey": [
+        "operation_id"
+      ],
+      "columns": {
+        "operation_id": {
+          "type": "string",
+          "nullable": false,
+          "description": "一次资产调协操作的稳定 UUID。"
+        },
+        "workspace_id": {
+          "type": "string",
+          "nullable": false,
+          "description": "发起调协的 Studio 工作区 ID。"
+        },
+        "data_asset_name": {
+          "type": "string",
+          "nullable": false,
+          "description": "资产清单中的稳定数据资产名。"
+        },
+        "asset_type": {
+          "type": "string",
+          "nullable": false,
+          "description": "资产类型：physical 或 virtual。"
+        },
+        "reconcile_action": {
+          "type": "string",
+          "nullable": true,
+          "description": "调协结果：created、updated 或 unchanged；失败时为空。"
+        },
+        "status": {
+          "type": "string",
+          "nullable": false,
+          "description": "调协终态：succeeded 或 failed。"
+        },
+        "actor": {
+          "type": "string",
+          "nullable": false,
+          "description": "调协发起方。"
+        },
+        "started_at": {
+          "type": "timestamptz",
+          "nullable": false
+        },
+        "finished_at": {
+          "type": "timestamptz",
+          "nullable": false
+        },
+        "error_message": {
+          "type": "string",
+          "nullable": true,
+          "description": "调协失败时的错误信息。"
+        }
+      }
+    }
+  ]
+}

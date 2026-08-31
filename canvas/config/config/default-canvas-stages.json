@@ -15,6 +15,13 @@
       "stage_description": "将数据源加工成资产",
       "table_kind": "control",
       "table_name": "t_factory_config_pipeline"
+    },
+    {
+      "stage_key": "asset",
+      "stage_name": "资产",
+      "stage_description": "展示当前工作环境中已经登记的资产。",
+      "table_kind": "control",
+      "table_name": "t_factory_config_asset"
     }
   ]
 }
