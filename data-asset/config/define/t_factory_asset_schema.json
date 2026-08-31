@@ -2,7 +2,6 @@
   "version": 1,
   "tables": [
     {
-      "label": "data asset registry config",
       "table": "t_factory_config_asset",
       "columns": {
         "data_asset_name": {

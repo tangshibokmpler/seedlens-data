@@ -3,6 +3,13 @@
   "table": "t_system_config_canvas_stage",
   "rows": [
     {
+      "stage_key": "asset",
+      "stage_name": "资产",
+      "stage_description": "展示当前工作环境中已经登记的资产。",
+      "table_kind": "control",
+      "table_name": "t_factory_config_asset"
+    },
+    {
       "stage_key": "data-source",
       "stage_name": "数据源",
       "stage_description": "展示当前工作环境中已经登记的数据源。",
@@ -15,13 +22,6 @@
       "stage_description": "将数据源加工成资产",
       "table_kind": "control",
       "table_name": "t_factory_config_pipeline"
-    },
-    {
-      "stage_key": "asset",
-      "stage_name": "资产",
-      "stage_description": "展示当前工作环境中已经登记的资产。",
-      "table_kind": "control",
-      "table_name": "t_factory_config_asset"
     }
   ]
 }

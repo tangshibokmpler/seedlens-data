@@ -16,76 +16,76 @@
             "label": "U8 supply-chain voucher relation asset",
             "table": "t_factory_asset_scm_vouch_relation",
             "columns": {
-          "autoid": {
-            "type": "int",
-            "nullable": false,
-            "description": "源表 dbo.SCMVouchRelation.autoid；资产主键。"
-          },
-          "csourcedetailtbl": {
-            "type": "string",
-            "nullable": false,
-            "description": "源单据明细表名。"
-          },
-          "cupordown": {
-            "type": "string",
-            "nullable": false,
-            "description": "单据关系方向。"
-          },
-          "clinkdetailtbl": {
-            "type": "string",
-            "nullable": false,
-            "description": "关联单据明细表名。"
-          },
-          "csourcekey": {
-            "type": "string",
-            "nullable": true,
-            "description": "源单据关系键。"
-          },
-          "clinkkey": {
-            "type": "string",
-            "nullable": true,
-            "description": "关联单据关系键。"
-          },
-          "clinkmainid": {
-            "type": "string",
-            "nullable": true,
-            "description": "关联单据主表标识。"
-          },
-          "clinkdetailid": {
-            "type": "string",
-            "nullable": true,
-            "description": "关联单据明细标识。"
-          },
-          "csourcedeffilter": {
-            "type": "string",
-            "nullable": true,
-            "description": "源单据自定义过滤条件。"
-          },
-          "cdeffilter": {
-            "type": "string",
-            "nullable": true,
-            "description": "关联单据自定义过滤条件。"
-          },
-          "cpath": {
-            "type": "string",
-            "nullable": true,
-            "description": "单据关系路径。"
-          },
-          "csourcesys": {
-            "type": "string",
-            "nullable": true,
-            "description": "源业务系统标识。"
-          },
-          "isinglelink": {
-            "type": "int",
-            "nullable": true,
-            "description": "是否单向关联。"
-          },
-          "isys": {
-            "type": "int",
-            "nullable": true,
-            "description": "系统关系标识。"
-          }
+              "autoid": {
+                "type": "int",
+                "nullable": false,
+                "description": "源表 dbo.SCMVouchRelation.autoid；资产主键。"
+              },
+              "csourcedetailtbl": {
+                "type": "string",
+                "nullable": false,
+                "description": "源单据明细表名。"
+              },
+              "cupordown": {
+                "type": "string",
+                "nullable": false,
+                "description": "单据关系方向。"
+              },
+              "clinkdetailtbl": {
+                "type": "string",
+                "nullable": false,
+                "description": "关联单据明细表名。"
+              },
+              "csourcekey": {
+                "type": "string",
+                "nullable": true,
+                "description": "源单据关系键。"
+              },
+              "clinkkey": {
+                "type": "string",
+                "nullable": true,
+                "description": "关联单据关系键。"
+              },
+              "clinkmainid": {
+                "type": "string",
+                "nullable": true,
+                "description": "关联单据主表标识。"
+              },
+              "clinkdetailid": {
+                "type": "string",
+                "nullable": true,
+                "description": "关联单据明细标识。"
+              },
+              "csourcedeffilter": {
+                "type": "string",
+                "nullable": true,
+                "description": "源单据自定义过滤条件。"
+              },
+              "cdeffilter": {
+                "type": "string",
+                "nullable": true,
+                "description": "关联单据自定义过滤条件。"
+              },
+              "cpath": {
+                "type": "string",
+                "nullable": true,
+                "description": "单据关系路径。"
+              },
+              "csourcesys": {
+                "type": "string",
+                "nullable": true,
+                "description": "源业务系统标识。"
+              },
+              "isinglelink": {
+                "type": "int",
+                "nullable": true,
+                "description": "是否单向关联。"
+              },
+              "isys": {
+                "type": "int",
+                "nullable": true,
+                "description": "系统关系标识。"
+              }
             },
             "primaryKey": [
               "autoid"
