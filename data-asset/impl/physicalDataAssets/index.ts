@@ -1,38 +1,32 @@
-import { createHash } from "node:crypto";
-
-import { Pipeline } from "@agentnexus/lakecore/model";
+import type {
+  BusinessTableManifestColumn,
+  TenantBusinessTableManifest,
+} from "@agentnexus/lakecore/model";
+import {
+  Pipeline,
+  resolveSourceColumnType,
+} from "@agentnexus/lakecore/model";
 import {
   assertTargetedRecordInputs,
   resolveRecordInputs,
   type PipelineRecordInputs,
-} from "../record-inputs.js";
+} from "./record-inputs.js";
 import type { PipelineRunContext } from "./types.js";
-import {
-  deleteTablePipelineState,
-  loadTablePipelineState,
-  reconcileStateValue,
-  renewTableHeartbeat,
-  tableReconcileLeaseReady,
-  writeTablePipelineState,
-} from "./state.js";
 
-type TargetAssetType = "virtual";
 type BuiltinDataSourceKind = "pg" | "mysql" | "sqlserver";
 type ImplementationKind = "builtin" | "custom";
 
-interface DataFactoryConfig {
+interface PhysicalAssetConfig {
   pipelineTable: string;
   dataSourceTable: string;
-  stateTable: string;
 }
 
 interface PipelineConfigRow {
   name: string;
   data_source_key: string;
-  target_asset_type: string;
   kind: ImplementationKind;
   pipeline_code_key: string;
-  data_pipeline_code_key?: string;
+  data_asset_name: string;
   processing_config: Record<string, unknown>;
 }
 
@@ -54,26 +48,23 @@ interface FieldMapping {
   targetType?: "string";
 }
 
-interface BuiltinProcessingConfig {
+interface PhysicalAssetProcessingConfig {
   source: {
     table: string;
     schema?: string;
   };
-  target: {
-    assetTable: string;
-    primaryKey: readonly string[];
-  };
+  primaryKey: readonly string[];
   fieldMappings: readonly FieldMapping[];
 }
 
-interface MatchedPipelineConfig {
+interface MatchedPhysicalAssetConfig {
   name: string;
   dataSourceKey: string;
-  processing: BuiltinProcessingConfig;
+  assetTable: string;
+  processing: PhysicalAssetProcessingConfig;
 }
 
 interface SourceRef {
-  sourceKind: string;
   catalog: string;
   schema: string;
   table: string;
@@ -83,43 +74,34 @@ interface SourceRef {
 interface SourceColumnInfo {
   name: string;
   type: string;
+  nullable: boolean;
 }
 
 const DEFAULT_SOURCE_SCHEMA = "public";
-const TARGET_ASSET_TYPE = "virtual" satisfies TargetAssetType;
 
-export class BuiltinVirtualDatasetPipeline {
-  @Pipeline({ tag: "dataFactory", pipelineKey: "builtin_virtual_dataset" })
+export class BuiltinPhysicalDatasetPipeline {
+  @Pipeline({ tag: "dataFactory", pipelineKey: "builtin_physical_dataset" })
   static Run(context: PipelineRunContext): Promise<void> {
     return run(context);
   }
 }
 
 /**
- * 功能：根据数据加工配置为外部源表生成虚拟数据集视图。
- * 逻辑：默认读取完整 pipeline 和数据源配置；config.recordInputs 非空时只消费指定记录，校验映射并调谐视图语义。
- * 幂等：采用 reconcile/preserve 策略；定向模式不清理其他配置状态，有效租约只续心跳，成功同时记录表和实时数据状态。
+ * 功能：根据源表结构和字段映射创建或调和 data_versioned 物理资产表 schema，不迁移业务数据。
+ * 输入：t_factory_config_pipeline、t_factory_config_source 及外部源表结构；目标表名取自 data_asset_name。
+ * 逻辑：解析源字段类型，生成单表 schema manifest，并通过 ControlPlane 使目标表定义收敛。
+ * 幂等：采用 reconcile/preserve 策略；定义一致时不变更表，也不删除未出现在本次输入中的其他资产表。
  */
 export async function run(context: PipelineRunContext): Promise<void> {
   assertConcreteTarget(context);
-  const config = dataFactoryConfig(context.config);
-  const pipelineTable = config.pipelineTable;
-  const dataSourceTable = config.dataSourceTable;
+  const config = physicalAssetConfig(context.config);
   const recordInputs = resolveRecordInputs(context.config);
-  assertTargetedRecordInputs(recordInputs, [pipelineTable, dataSourceTable]);
-  const targeted = recordInputs.size > 0;
+  assertTargetedRecordInputs(recordInputs, [config.pipelineTable, config.dataSourceTable]);
   const [pipelineRows, dataSources] = await Promise.all([
-    loadPipelineConfigRows(context, pipelineTable, recordInputs),
-    loadDataSources(context, dataSourceTable, recordInputs),
+    loadPipelineConfigRows(context, config.pipelineTable, recordInputs),
+    loadDataSources(context, config.dataSourceTable, recordInputs),
   ]);
-  if (!targeted) {
-    await removeMissingTablePipelineStates(
-      context,
-      config.stateTable,
-      new Set(pipelineRows.map((row) => row.name)),
-    );
-  }
-  const matched = matchedPipelineConfigs(context, pipelineRows);
+  const matched = matchedPhysicalAssetConfigs(context, pipelineRows);
   const dataSourcesByName = new Map(dataSources.map((source) => [source.name, source]));
   const expectedAssetTables = new Set<string>();
 
@@ -127,84 +109,63 @@ export async function run(context: PipelineRunContext): Promise<void> {
     if (context.signal.aborted) {
       throw new Error(`${context.pipelineKey} aborted`);
     }
-    if (expectedAssetTables.has(configRow.processing.target.assetTable)) {
-      throw new Error(`pipeline ${context.pipelineKey} has duplicate target asset table ${configRow.processing.target.assetTable}`);
+    if (expectedAssetTables.has(configRow.assetTable)) {
+      throw new Error(
+        `pipeline ${context.pipelineKey} has duplicate target asset table ${configRow.assetTable}`,
+      );
     }
-    expectedAssetTables.add(configRow.processing.target.assetTable);
+    expectedAssetTables.add(configRow.assetTable);
 
-    let source: SourceRef;
-    let sourceColumns: readonly SourceColumnInfo[];
     try {
       const dataSource = dataSourcesByName.get(configRow.dataSourceKey);
       if (!dataSource) {
-        throw new Error(`pipeline config ${configRow.name} references missing data source ${configRow.dataSourceKey}`);
+        throw new Error(
+          `physical asset ${configRow.name} references missing data source ${configRow.dataSourceKey}`,
+        );
       }
-      source = await resolveSourceRef(context, dataSource, configRow.processing);
-      sourceColumns = await loadSourceColumns(context, source);
+      const source = await resolveSourceRef(context, dataSource, configRow.processing);
+      const sourceColumns = await loadSourceColumns(context, source);
       assertSourceMappingsExist(configRow, sourceColumns);
-    } catch (error) {
-      const failed = reconcileStateValue("failed", stateHash({ config: configRow }), error);
-      await writeTablePipelineState(context, {
-        table: config.stateTable,
-        key: configRow.name,
-        leaseMs: context.heartbeatLeaseMs,
-        tableState: failed,
-        dataState: failed,
-        success: false,
+      const result = await context.services.controlPlane.businessSchemasReconcile({
+        actor: context.actor,
+        schema: physicalAssetManifest(configRow, sourceColumns),
       });
-      context.logger.warn("virtual dataset source resolution failed", {
+      const action = schemaAction(result, configRow.assetTable);
+      if (action !== "unchanged") {
+        context.logger.info("physical asset schema changed", {
+          config: configRow.name,
+          assetTable: configRow.assetTable,
+          action,
+          source: source.qualified,
+        });
+      }
+    } catch (error) {
+      context.logger.warn("physical asset schema reconcile failed", {
         config: configRow.name,
+        assetTable: configRow.assetTable,
         error: errorMessage(error),
       });
-      continue;
-    }
-    await reconcileVirtualDataset(
-      context,
-      configRow,
-      source,
-      sourceColumns,
-      config.stateTable,
-      context.heartbeatLeaseMs,
-    );
-  }
-}
-
-async function removeMissingTablePipelineStates(
-  context: PipelineRunContext,
-  table: string,
-  expectedKeys: ReadonlySet<string>,
-): Promise<void> {
-  const rows = await context.services.dataPlane.dataTableRowsList({ table });
-  for (const row of rows) {
-    const key = typeof row.config_key === "string" ? row.config_key.trim() : "";
-    if (key && !expectedKeys.has(key)) {
-      await deleteTablePipelineState(context, table, key);
     }
   }
 }
 
 function assertConcreteTarget(context: PipelineRunContext): void {
   if (context.services.scope.tenantId === "manager" || context.services.scope.env === "all") {
-    throw new Error("builtin virtual dataset requires a concrete tenantId/env context");
+    throw new Error("builtin physical dataset requires a concrete tenantId/env context");
   }
 }
 
-function dataFactoryConfig(config: unknown): DataFactoryConfig {
+function physicalAssetConfig(config: unknown): PhysicalAssetConfig {
   if (!config || typeof config !== "object" || Array.isArray(config)) {
-    throw new Error("builtin virtual dataset requires pipelineTable and dataSourceTable config");
+    throw new Error("builtin physical dataset requires pipelineTable and dataSourceTable config");
   }
   const raw = config as Record<string, unknown>;
   const pipelineTable = textField(raw, "pipelineTable");
   const dataSourceTable = textField(raw, "dataSourceTable");
-  const stateTable = textField(raw, "stateTable");
-  if (!pipelineTable || !dataSourceTable || !stateTable) {
-    throw new Error("builtin virtual dataset requires pipelineTable, dataSourceTable, and stateTable config");
+  if (!pipelineTable || !dataSourceTable) {
+    throw new Error("builtin physical dataset requires pipelineTable and dataSourceTable config");
   }
-  return {
-    pipelineTable,
-    dataSourceTable,
-    stateTable,
-  };
+  return { pipelineTable, dataSourceTable };
 }
 
 async function loadPipelineConfigRows(
@@ -227,7 +188,7 @@ async function loadDataSources(
     .filter((source): source is BuiltinDataSource => Boolean(source));
   const skipped = rows.length - dataSources.length;
   if (skipped > 0) {
-    context.logger.warn("builtin virtual dataset skipped unsupported data sources", {
+    context.logger.warn("builtin physical dataset skipped unsupported data sources", {
       table,
       skipped,
     });
@@ -252,7 +213,7 @@ async function loadControlRows(
     });
   } catch (error) {
     if (isMissingTableError(error, table)) {
-      context.logger.warn(`builtin virtual dataset skipped env without ${label} table`, {
+      context.logger.warn(`builtin physical dataset skipped env without ${label} table`, {
         tenantId: context.services.scope.tenantId,
         env: context.services.scope.env,
         table,
@@ -267,38 +228,34 @@ async function loadControlRows(
 function pipelineConfigRow(row: Record<string, unknown>, index: number): PipelineConfigRow {
   const name = textField(row, "name");
   const dataSourceKey = textField(row, "data_source_key");
-  const targetAssetType = textField(row, "target_asset_type");
   const implementationKind = textField(row, "kind");
   const pipelineCodeKey = textField(row, "pipeline_code_key");
-  const dataPipelineCodeKey = textField(row, "data_pipeline_code_key");
-  if (!name || !dataSourceKey || !targetAssetType || !implementationKind || !pipelineCodeKey) {
-    throw new Error(`pipeline config row[${index}] requires name, data_source_key, target_asset_type, kind, and pipeline_code_key`);
+  const dataAssetName = textField(row, "data_asset_name");
+  if (!name || !dataSourceKey || !implementationKind || !pipelineCodeKey || !dataAssetName) {
+    throw new Error(
+      `pipeline config row[${index}] requires name, data_source_key, kind, pipeline_code_key, and data_asset_name`,
+    );
   }
   if (implementationKind !== "builtin" && implementationKind !== "custom") {
     throw new Error(`pipeline config row[${index}].kind must be builtin or custom`);
   }
-  if (targetAssetType === "physical" && !dataPipelineCodeKey) {
-    throw new Error(
-      `pipeline config row[${index}] physical asset requires data_pipeline_code_key`,
-    );
-  }
-  if (targetAssetType === "virtual" && dataPipelineCodeKey) {
-    throw new Error(
-      `pipeline config row[${index}] virtual asset must not define data_pipeline_code_key`,
-    );
-  }
   return {
     name,
     data_source_key: dataSourceKey,
-    target_asset_type: targetAssetType,
     kind: implementationKind,
     pipeline_code_key: pipelineCodeKey,
-    ...(dataPipelineCodeKey ? { data_pipeline_code_key: dataPipelineCodeKey } : {}),
-    processing_config: jsonObjectField(row.processing_config, `pipeline config ${name}.processing_config`),
+    data_asset_name: dataAssetName,
+    processing_config: jsonObjectField(
+      row.processing_config,
+      `pipeline config ${name}.processing_config`,
+    ),
   };
 }
 
-function dataSourceRow(row: Record<string, unknown>, index: number): BuiltinDataSource | undefined {
+function dataSourceRow(
+  row: Record<string, unknown>,
+  index: number,
+): BuiltinDataSource | undefined {
   const name = textField(row, "name");
   const kind = textField(row, "kind");
   const builtinKind = textField(row, "builtin_kind");
@@ -313,7 +270,9 @@ function dataSourceRow(row: Record<string, unknown>, index: number): BuiltinData
   const database = textField(connection, "database");
   const user = textField(connection, "user");
   if (!name || !host || !database || !user) {
-    throw new Error(`builtin data source row[${index}] requires name, connection.host, connection.database, and connection.user`);
+    throw new Error(
+      `builtin data source row[${index}] requires name, connection.host, connection.database, and connection.user`,
+    );
   }
   return {
     name,
@@ -328,32 +287,40 @@ function dataSourceRow(row: Record<string, unknown>, index: number): BuiltinData
   };
 }
 
-function matchedPipelineConfigs(
+function matchedPhysicalAssetConfigs(
   context: PipelineRunContext,
   rows: readonly PipelineConfigRow[],
-): readonly MatchedPipelineConfig[] {
+): readonly MatchedPhysicalAssetConfig[] {
   return rows
     .filter((row) =>
       row.kind === "builtin"
-      && row.pipeline_code_key === context.pipelineKey
-      && row.target_asset_type === TARGET_ASSET_TYPE)
+      && row.pipeline_code_key === context.pipelineKey)
     .map((row) => ({
       name: row.name,
       dataSourceKey: row.data_source_key,
+      assetTable: row.data_asset_name,
       processing: normalizeProcessingConfig(row),
     }));
 }
 
-function normalizeProcessingConfig(row: PipelineConfigRow): BuiltinProcessingConfig {
+function normalizeProcessingConfig(row: PipelineConfigRow): PhysicalAssetProcessingConfig {
   const config = row.processing_config;
-  const source = jsonObjectField(config.source, `pipeline config ${row.name}.processing_config.source`);
-  const target = jsonObjectField(config.target, `pipeline config ${row.name}.processing_config.target`);
+  const source = jsonObjectField(
+    config.source,
+    `pipeline config ${row.name}.processing_config.source`,
+  );
+  const target = jsonObjectField(
+    config.target,
+    `pipeline config ${row.name}.processing_config.target`,
+  );
   const sourceTable = textField(source, "table");
   const sourceSchema = textField(source, "schema");
-  const assetTable = textField(target, "asset_table");
-  const primaryKey = stringArray(target.primary_key, `pipeline config ${row.name}.processing_config.target.primary_key`);
-  if (!sourceTable || !assetTable) {
-    throw new Error(`pipeline config ${row.name} requires processing_config.source.table and processing_config.target.asset_table`);
+  const primaryKey = stringArray(
+    target.primary_key,
+    `pipeline config ${row.name}.processing_config.target.primary_key`,
+  );
+  if (!sourceTable) {
+    throw new Error(`pipeline config ${row.name} requires processing_config.source.table`);
   }
   if (primaryKey.length !== 1) {
     throw new Error(`pipeline config ${row.name} target.primary_key must contain exactly one field`);
@@ -372,17 +339,16 @@ function normalizeProcessingConfig(row: PipelineConfigRow): BuiltinProcessingCon
     targetFields.add(mapping.targetField);
   }
   if (!targetFields.has(primaryKey[0]!)) {
-    throw new Error(`pipeline config ${row.name} primary key ${primaryKey[0]} is not in field_mappings target fields`);
+    throw new Error(
+      `pipeline config ${row.name} primary key ${primaryKey[0]} is not in field_mappings target fields`,
+    );
   }
   return {
     source: {
       table: sourceTable,
       ...(sourceSchema ? { schema: sourceSchema } : {}),
     },
-    target: {
-      assetTable,
-      primaryKey,
-    },
+    primaryKey,
     fieldMappings: mappings,
   };
 }
@@ -396,10 +362,14 @@ function fieldMapping(entry: unknown, configName: string, index: number): FieldM
   const targetField = textField(raw, "target_field");
   const targetType = textField(raw, "target_type");
   if (!sourceField || !targetField) {
-    throw new Error(`pipeline config ${configName} field_mappings[${index}] requires source_field and target_field`);
+    throw new Error(
+      `pipeline config ${configName} field_mappings[${index}] requires source_field and target_field`,
+    );
   }
   if (targetType && targetType !== "string") {
-    throw new Error(`pipeline config ${configName} field_mappings[${index}].target_type only supports string`);
+    throw new Error(
+      `pipeline config ${configName} field_mappings[${index}].target_type only supports string`,
+    );
   }
   return {
     sourceField,
@@ -411,7 +381,7 @@ function fieldMapping(entry: unknown, configName: string, index: number): FieldM
 async function resolveSourceRef(
   context: PipelineRunContext,
   dataSource: BuiltinDataSource,
-  processing: BuiltinProcessingConfig,
+  processing: PhysicalAssetProcessingConfig,
 ): Promise<SourceRef> {
   const expectedCatalog = externalCatalogName({
     tenantId: context.services.scope.tenantId,
@@ -424,13 +394,14 @@ async function resolveSourceRef(
   const active = connectors.trino?.activeConfigs.find((entry) =>
     entry.key === expectedCatalog || entry.name === expectedCatalog);
   if (!active) {
-    throw new Error(`trino connector ${expectedCatalog} for data source ${dataSource.name} is not active; run pipelinePrelude first`);
+    throw new Error(
+      `trino connector ${expectedCatalog} for data source ${dataSource.name} is not active; run pipelinePrelude first`,
+    );
   }
   const schema = processing.source.schema
     ?? dataSource.connection.schema
     ?? defaultSourceSchema(dataSource.builtin_kind, dataSource.connection.database);
   return {
-    sourceKind: dataSource.builtin_kind,
     catalog: active.name,
     schema,
     table: processing.source.table,
@@ -448,7 +419,7 @@ async function loadSourceColumns(
     schema: source.schema,
     max_pages: 10,
     sql: [
-      "SELECT column_name, data_type",
+      "SELECT column_name, data_type, is_nullable",
       "FROM information_schema.columns",
       `WHERE table_schema = ${quoteSqlString(source.schema)}`,
       `  AND table_name = ${quoteSqlString(source.table)}`,
@@ -458,133 +429,81 @@ async function loadSourceColumns(
   const columns = result.rows.map((row) => ({
     name: stringCell(row[0], "column_name"),
     type: stringCell(row[1], "data_type"),
+    nullable: String(row[2] ?? "").toUpperCase() !== "NO",
   }));
   if (columns.length === 0) {
-    throw new Error(`source table ${source.catalog}.${source.schema}.${source.table} does not expose columns in information_schema`);
+    throw new Error(
+      `source table ${source.catalog}.${source.schema}.${source.table} does not expose columns in information_schema`,
+    );
   }
   return columns;
 }
 
 function assertSourceMappingsExist(
-  config: MatchedPipelineConfig,
+  config: MatchedPhysicalAssetConfig,
   sourceColumns: readonly SourceColumnInfo[],
 ): void {
   const sourceFieldNames = new Set(sourceColumns.map((column) => column.name.toLowerCase()));
   for (const mapping of config.processing.fieldMappings) {
     if (!sourceFieldNames.has(mapping.sourceField.toLowerCase())) {
-      throw new Error(`pipeline config ${config.name} references missing source column ${mapping.sourceField}`);
+      throw new Error(
+        `physical asset ${config.name} references missing source column ${mapping.sourceField}`,
+      );
     }
   }
 }
 
-async function reconcileVirtualDataset(
-  context: PipelineRunContext,
-  config: MatchedPipelineConfig,
-  source: SourceRef,
+function physicalAssetManifest(
+  config: MatchedPhysicalAssetConfig,
   sourceColumns: readonly SourceColumnInfo[],
-  stateTable: string,
-  leaseMs: number,
-): Promise<void> {
-  const expectedHash = stateHash({ config, source, sourceColumns });
-  const previous = await loadTablePipelineState(context, stateTable, config.name);
-  if (tableReconcileLeaseReady(previous, expectedHash)) {
-    await renewTableHeartbeat(context, {
-      table: stateTable,
-      key: config.name,
-      leaseMs,
-    });
-    return;
-  }
-
-  const sourceColumnsByName = new Map(sourceColumns.map((column) => [column.name.toLowerCase(), column]));
-  try {
-    const pending = reconcileStateValue("pending", expectedHash);
-    await writeTablePipelineState(context, {
-      table: stateTable,
-      key: config.name,
-      leaseMs,
-      tableState: pending,
-      dataState: pending,
-      success: false,
-    });
-    const result = await context.services.dataPlane.dataEnvironmentViewReconcile({
-      actor: context.actor,
-      view: config.processing.target.assetTable,
-      source: {
-        kind: source.sourceKind,
-        catalog: source.catalog,
-        schema: source.schema,
-        table: source.table,
-      },
-      field_mappings: config.processing.fieldMappings.map((mapping) => ({
-        source_field: mapping.sourceField,
-        target_field: mapping.targetField,
-        source_type: sourceColumnsByName.get(mapping.sourceField.toLowerCase())?.type,
-        target_type: mapping.targetType,
-      })),
-      marker: viewMarker(context, config),
-    });
-    const ready = reconcileStateValue("ready", expectedHash);
-    await writeTablePipelineState(context, {
-      table: stateTable,
-      key: config.name,
-      leaseMs,
-      tableState: ready,
-      dataState: ready,
-      success: true,
-    });
-    if (result.changed) {
-      context.logger.info("virtual dataset changed", {
-        config: config.name,
-        action: result.action,
-        source: source.qualified,
-        view: result.query_view_ref,
-      });
-    }
-  } catch (error) {
-    const failed = reconcileStateValue("failed", expectedHash, error);
-    await writeTablePipelineState(context, {
-      table: stateTable,
-      key: config.name,
-      leaseMs,
-      tableState: failed,
-      dataState: failed,
-      success: false,
-    });
-    context.logger.warn("virtual dataset reconcile failed", {
-      config: config.name,
-      error: errorMessage(error),
-    });
-  }
-}
-
-function stateHash(value: unknown): string {
-  return createHash("sha256")
-    .update(JSON.stringify(stableValue(value)))
-    .digest("hex");
-}
-
-function stableValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map((entry) => stableValue(entry));
-  }
-  if (!value || typeof value !== "object") {
-    return value;
-  }
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>)
-      .filter(([, entry]) => entry !== undefined)
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([key, entry]) => [key, stableValue(entry)]),
+): TenantBusinessTableManifest {
+  const sourceColumnsByName = new Map(
+    sourceColumns.map((column) => [column.name.toLowerCase(), column]),
   );
+  const columns: Record<string, BusinessTableManifestColumn> = {};
+  for (const mapping of config.processing.fieldMappings) {
+    const sourceColumn = sourceColumnsByName.get(mapping.sourceField.toLowerCase());
+    if (!sourceColumn) {
+      throw new Error(
+        `physical asset ${config.name} references missing source column ${mapping.sourceField}`,
+      );
+    }
+    columns[mapping.targetField] = {
+      type: mappedSourceColumnType(sourceColumn.type, mapping.targetType),
+      nullable: !config.processing.primaryKey.includes(mapping.targetField) && sourceColumn.nullable,
+    };
+  }
+  return {
+    version: 1,
+    tables: [{
+      label: config.assetTable,
+      kind: "data_versioned",
+      table: config.assetTable,
+      columns,
+      primaryKey: config.processing.primaryKey,
+    }],
+  };
 }
 
-function viewMarker(context: PipelineRunContext, config: MatchedPipelineConfig): string {
-  return [
-    "agentnexus.managed_by=lakectd",
-    `pipeline_key=${context.pipelineKey}`,
-    `pipeline_config=${config.name}`,
-  ].join("; ");
+function schemaAction(
+  result: {
+    created_tables: readonly string[];
+    updated_tables: readonly string[];
+    unchanged_tables: readonly string[];
+  },
+  table: string,
+): "created" | "updated" | "unchanged" {
+  if (result.created_tables.includes(table)) return "created";
+  if (result.updated_tables.includes(table)) return "updated";
+  if (result.unchanged_tables.includes(table)) return "unchanged";
+  throw new Error(`schema reconcile result does not include physical asset table ${table}`);
+}
+
+function mappedSourceColumnType(type: string, targetType?: "string"): string {
+  const resolved = resolveSourceColumnType(type, {
+    highPrecisionDecimal: targetType === "string" ? "string" : "reject",
+  });
+  return targetType === "string" ? "string" : resolved.modelType;
 }
 
 function quoteTrinoIdentifier(value: string, label = "trino identifier"): string {
@@ -629,22 +548,10 @@ function stringArray(value: unknown, label: string): readonly string[] {
 }
 
 function jsonObjectField(value: unknown, label: string): Record<string, unknown> {
-  const parsed = jsonObjectFieldOptional(value, label);
-  if (!parsed) {
-    throw new Error(`${label} must be a JSON object`);
-  }
-  return parsed;
-}
-
-function jsonObjectFieldOptional(value: unknown, label: string): Record<string, unknown> | undefined {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
   if (typeof value === "string") {
-    const parsed = JSON.parse(value) as unknown;
-    return jsonObjectFieldOptional(parsed, label);
+    return jsonObjectField(JSON.parse(value) as unknown, label);
   }
-  if (typeof value === "object" && !Array.isArray(value)) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
     return value as Record<string, unknown>;
   }
   throw new Error(`${label} must be a JSON object`);

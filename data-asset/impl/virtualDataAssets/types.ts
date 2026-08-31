@@ -2,16 +2,12 @@ import type {
   PipelineRunContext as LakecorePipelineRunContext,
 } from "@agentnexus/lakecore/model/pipeline";
 
-type PipelineRow = Record<string, unknown>;
 type PipelineKey = string | number | boolean;
+type PipelineRow = Record<string, unknown>;
 
 interface ConnectorActiveConfig {
   key: string;
   name: string;
-  connector: string;
-  displayName: string;
-  purpose?: string;
-  config: Record<string, unknown>;
 }
 
 interface PipelineServices {
@@ -37,18 +33,6 @@ interface PipelineServices {
     }): Promise<readonly PipelineRow[]>;
   };
   dataPlane: {
-    dataTableRowsList(input: {
-      table: string;
-      filters?: Readonly<Record<string, PipelineKey | undefined>>;
-      limit?: number;
-    }): Promise<readonly PipelineRow[]>;
-    dataTableRowWrite(input: {
-      actor: string;
-      table: string;
-      operation: "insert" | "update" | "delete" | "set";
-      record: PipelineRow;
-      key?: PipelineKey;
-    }): Promise<unknown>;
     dataEnvironmentSqlQuery(input: {
       actor: string;
       sql: string;

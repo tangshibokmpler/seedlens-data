@@ -12,7 +12,7 @@
         "data_asset_name": {
           "type": "string",
           "nullable": false,
-          "description": "引用 t_factory_config_pipeline.data_asset_name; 绑定管道使用此键查找由数据工厂管道创建的数据资产视图。"
+          "description": "引用 t_factory_config_asset.data_asset_name；绑定调谐通过资产清单解析目标表或视图。"
         },
         "kind": {
           "type": "string",

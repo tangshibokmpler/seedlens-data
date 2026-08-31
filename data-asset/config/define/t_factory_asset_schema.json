@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "tables": [
+    {
+      "label": "data asset registry config",
+      "table": "t_factory_config_asset",
+      "columns": {
+        "data_asset_name": {
+          "type": "string",
+          "nullable": false,
+          "description": "数据资产稳定名称，也是清单主键；管道和本体绑定通过该字段引用资产。"
+        },
+        "label": {
+          "type": "string",
+          "nullable": false,
+          "description": "数据资产展示名称。"
+        },
+        "description": {
+          "type": "string",
+          "nullable": true,
+          "description": "数据资产用途说明。"
+        },
+        "namespace_kind": {
+          "type": "string",
+          "nullable": false,
+          "description": "资产所属逻辑命名空间。第一版固定为 data；实际 catalog 和 schema 由 tenant/env 运行时解析。"
+        },
+        "table_name": {
+          "type": "string",
+          "nullable": false,
+          "description": "资产在数据面中的稳定逻辑表名或视图名。"
+        },
+        "asset_type": {
+          "type": "string",
+          "nullable": false,
+          "description": "资产实现类型。允许值: physical, virtual；physical 必须调谐为 data_versioned 物理表，virtual 必须调谐为查询视图。"
+        },
+        "schema_json": {
+          "type": "json",
+          "nullable": false,
+          "description": "由原资产 schema 定义整体转换得到的 JSON，保留 version、tables、label、table、columns 和 primaryKey。"
+        },
+        "kind": {
+          "type": "string",
+          "nullable": false,
+          "description": "调谐实现类型。允许值: builtin, custom。"
+        },
+        "pipeline_entry": {
+          "type": "json",
+          "nullable": false,
+          "description": "资产调谐管道入口，包含 pipelineKey 与 codePath。physical 指向物理表 schema 调谐实现，virtual 指向虚拟视图调谐实现。"
+        },
+        "metadata": {
+          "type": "json",
+          "nullable": false,
+          "description": "不参与核心调谐语义的扩展记录信息。",
+          "default": {}
+        }
+      },
+      "primaryKey": [
+        "data_asset_name"
+      ]
+    }
+  ]
+}

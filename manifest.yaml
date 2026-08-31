@@ -11,13 +11,13 @@ schemas:
     path: data-source/config/define/t_source_materials_schema.json
 
   - kind: control
+    path: data-asset/config/define/t_factory_asset_schema.json
+
+  - kind: control
     path: pipelines/config/define/t_pipeline_schema.json
 
   - kind: control
     path: ontology/config/define/t_ontology_bind_schema.json
-
-  - kind: data_unversioned
-    path: pipelines/config/define/t_factory_state_asset_schema.json
 
   - kind: data_unversioned
     path: pipelines/config/define/t_factory_state_source_material_schema.json
@@ -40,3 +40,5 @@ schemas:
 data:
   - path: canvas/config/config/default-canvas-stages.json
   - path: data-source/config/configs/u8-999-test-sqlserver.json
+  - path: data-asset/config/configs/scm_vouch_relation_asset_define.json
+  - path: pipelines/config/configs/scm_vouch_relation_pipeline.json

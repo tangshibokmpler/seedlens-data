@@ -1,21 +1,12 @@
 export type PipelineRecord = Record<string, unknown>;
 
-export type PipelineRecordInputs = ReadonlyMap<
-  string,
-  readonly PipelineRecord[]
->;
+export type PipelineRecordInputs = ReadonlyMap<string, readonly PipelineRecord[]>;
 
 export function resolveRecordInputs(config: unknown): PipelineRecordInputs {
-  if (!config || typeof config !== "object" || Array.isArray(config)) {
-    return new Map();
-  }
+  if (!config || typeof config !== "object" || Array.isArray(config)) return new Map();
   const value = (config as Record<string, unknown>).recordInputs;
-  if (value === undefined) {
-    return new Map();
-  }
-  if (!Array.isArray(value)) {
-    throw new Error("pipeline config recordInputs must be an array");
-  }
+  if (value === undefined) return new Map();
+  if (!Array.isArray(value)) throw new Error("pipeline config recordInputs must be an array");
 
   const inputs = new Map<string, readonly PipelineRecord[]>();
   for (const [inputIndex, input] of value.entries()) {
@@ -50,9 +41,7 @@ export function assertTargetedRecordInputs(
   inputs: PipelineRecordInputs,
   requiredTables: readonly string[],
 ): void {
-  if (inputs.size === 0) {
-    return;
-  }
+  if (inputs.size === 0) return;
   const required = new Set(requiredTables);
   const missing = [...required].filter((table) => !inputs.has(table));
   const unexpected = [...inputs.keys()].filter((table) => !required.has(table));

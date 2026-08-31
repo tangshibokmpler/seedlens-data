@@ -14,11 +14,6 @@
           "nullable": false,
           "description": "数据源名称, 引用 t_factory_config_source.name."
         },
-        "target_asset_type": {
-          "type": "string",
-          "nullable": false,
-          "description": "目标数据资产类型, 允许值: virtual, physical. 即虚拟资产和物理资产"
-        },
         "kind": {
           "type": "string",
           "nullable": false,
@@ -27,17 +22,12 @@
         "pipeline_code_key": {
           "type": "string",
           "nullable": false,
-          "description": "Lakectd 注册的投影与表定义 pipelineKey, 用于创建或调谐目标资产"
-        },
-        "data_pipeline_code_key": {
-          "type": "string",
-          "nullable": true,
-          "description": "物理表数据导入 pipelineKey。virtual 资产必须为空，physical 资产由该 pipeline 在表定义 ready 后导入数据"
+          "description": "Lakectd 注册的数据加工 pipelineKey。管道只负责向 data_asset_name 指向的既有资产送数，不创建或修改资产定义。"
         },
         "data_asset_name": {
           "type": "string",
-          "nullable": true,
-          "description": "数据资产名称"
+          "nullable": false,
+          "description": "目标数据资产名称，引用 t_factory_config_asset.data_asset_name。管道不拥有资产表定义。"
         },
         "trigger": {
           "type": "json",
@@ -47,7 +37,7 @@
         "processing_config": {
           "type": "json",
           "nullable": false,
-          "description": "源到资产处理配置。内置管道期望 source.table、target.asset_table、target.primary_key 和 field_mappings；超 38 位 decimal 可在字段映射显式设置 target_type=string。"
+          "description": "源到资产的数据加工配置。内置实现期望 source.schema、source.table 和 field_mappings；目标表名、类型、schema 和主键统一从 t_factory_config_asset 解析。"
         }
       },
       "primaryKey": [

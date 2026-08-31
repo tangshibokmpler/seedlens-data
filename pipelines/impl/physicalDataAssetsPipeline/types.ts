@@ -1,39 +1,13 @@
 import type {
-  TenantBusinessTableManifest,
-} from "@agentnexus/lakecore/model";
-import type {
   PipelineRunContext as LakecorePipelineRunContext,
 } from "@agentnexus/lakecore/model/pipeline";
 
-type PipelineRow = Record<string, unknown>;
 type PipelineKey = string | number | boolean;
+type PipelineRow = Record<string, unknown>;
 
 interface ConnectorActiveConfig {
   key: string;
   name: string;
-  connector: string;
-  displayName: string;
-  purpose?: string;
-  config: Record<string, unknown>;
-}
-
-interface BusinessSchemasMutationResult {
-  created_tables: readonly string[];
-  updated_tables: readonly string[];
-  unchanged_tables: readonly string[];
-  environments: readonly {
-    env: string;
-    data_plane_unversioned_tables?: readonly {
-      table: string;
-      physical_table_ref: string;
-      query_catalog: string;
-      query_namespace: readonly string[];
-      query_view_ref: string;
-      changed?: boolean;
-      table_action?: "created" | "updated" | "unchanged";
-      view_action?: "created" | "updated" | "unchanged";
-    }[];
-  }[];
 }
 
 interface PipelineServices {
@@ -57,10 +31,6 @@ interface PipelineServices {
       limit?: number;
       include_deleted?: boolean;
     }): Promise<readonly PipelineRow[]>;
-    businessSchemasReconcile(input: {
-      actor: string;
-      schema: TenantBusinessTableManifest;
-    }): Promise<BusinessSchemasMutationResult>;
   };
   dataPlane: {
     dataTableRowsList(input: {
@@ -68,6 +38,23 @@ interface PipelineServices {
       filters?: Readonly<Record<string, PipelineKey | undefined>>;
       limit?: number;
     }): Promise<readonly PipelineRow[]>;
+    dataTableRowsSet(input: {
+      actor: string;
+      table: string;
+      records: readonly PipelineRow[];
+    }): Promise<{
+      primary_key_field: string;
+      inserted_rows: number;
+      updated_rows: number;
+      unchanged_rows: number;
+    }>;
+    dataTableRowsDelete(input: {
+      actor: string;
+      table: string;
+      keys: readonly PipelineKey[];
+    }): Promise<{
+      deleted_rows: number;
+    }>;
     dataEnvironmentSqlQuery(input: {
       actor: string;
       sql: string;
@@ -77,13 +64,6 @@ interface PipelineServices {
     }): Promise<{
       rows: readonly unknown[][];
     }>;
-    dataTableRowWrite(input: {
-      actor: string;
-      table: string;
-      operation: "insert" | "update" | "delete" | "set";
-      record: PipelineRow;
-      key?: PipelineKey;
-    }): Promise<unknown>;
   };
 }
 
