@@ -13,6 +13,11 @@ interface ConnectorActiveConfig {
   name: string;
 }
 
+interface TrinoActiveCatalog {
+  catalog: string;
+  connector: string;
+}
+
 interface PipelineServices {
   scope: {
     readonly tenantId: string;
@@ -21,9 +26,11 @@ interface PipelineServices {
   lakehouse: {
     managerConnectorsList(input?: {
       provider?: "trino";
+      includeRuntime?: boolean;
     }): Promise<{
       trino?: {
         activeConfigs: readonly ConnectorActiveConfig[];
+        activeCatalogs?: readonly TrinoActiveCatalog[];
       };
     }>;
   };

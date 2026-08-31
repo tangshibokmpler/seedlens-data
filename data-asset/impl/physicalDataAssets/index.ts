@@ -102,6 +102,10 @@ export async function run(context: PipelineRunContext): Promise<void> {
     loadDataSources(context, config.dataSourceTable, recordInputs),
   ]);
   const matched = matchedPhysicalAssetConfigs(context, pipelineRows);
+  const targeted = recordInputs.size > 0;
+  if (targeted && matched.length === 0) {
+    throw new Error(`pipeline ${context.pipelineKey} did not match a physical asset config`);
+  }
   const dataSourcesByName = new Map(dataSources.map((source) => [source.name, source]));
   const expectedAssetTables = new Set<string>();
 
@@ -140,6 +144,12 @@ export async function run(context: PipelineRunContext): Promise<void> {
         });
       }
     } catch (error) {
+      if (targeted) {
+        throw new Error(
+          `physical asset ${configRow.name} schema reconcile failed: ${errorMessage(error)}`,
+          { cause: error },
+        );
+      }
       context.logger.warn("physical asset schema reconcile failed", {
         config: configRow.name,
         assetTable: configRow.assetTable,
@@ -390,22 +400,23 @@ async function resolveSourceRef(
   });
   const connectors = await context.services.lakehouse.managerConnectorsList({
     provider: "trino",
+    includeRuntime: true,
   });
-  const active = connectors.trino?.activeConfigs.find((entry) =>
-    entry.key === expectedCatalog || entry.name === expectedCatalog);
+  const active = connectors.trino?.activeCatalogs?.find((entry) =>
+    entry.catalog === expectedCatalog);
   if (!active) {
     throw new Error(
-      `trino connector ${expectedCatalog} for data source ${dataSource.name} is not active; run pipelinePrelude first`,
+      `trino catalog ${expectedCatalog} for data source ${dataSource.name} is not active; run pipelinePrelude first`,
     );
   }
   const schema = processing.source.schema
     ?? dataSource.connection.schema
     ?? defaultSourceSchema(dataSource.builtin_kind, dataSource.connection.database);
   return {
-    catalog: active.name,
+    catalog: active.catalog,
     schema,
     table: processing.source.table,
-    qualified: qualifiedTrinoTable(active.name, schema, processing.source.table),
+    qualified: qualifiedTrinoTable(active.catalog, schema, processing.source.table),
   };
 }
 
