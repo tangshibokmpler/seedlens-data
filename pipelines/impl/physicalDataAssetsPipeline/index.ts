@@ -1,6 +1,7 @@
 import {
   Pipeline,
   resolveSourceColumnType,
+  trinoSourceColumnExpression,
 } from "@agentnexus/lakecore/model";
 import {
   assertTargetedRecordInputs,
@@ -64,6 +65,7 @@ interface MatchedPipelineConfig {
 }
 
 interface SourceRef {
+  sourceKind: BuiltinDataSourceKind;
   catalog: string;
   schema: string;
   table: string;
@@ -155,6 +157,7 @@ export async function run(context: PipelineRunContext): Promise<void> {
       configRow,
       sourceRows,
       sourceColumns,
+      source.sourceKind,
     );
     if (summary.inserted + summary.updated + summary.deleted > 0) {
       context.logger.info("physical asset data changed", {
@@ -446,6 +449,7 @@ function resolveSourceRef(
     };
   });
   return {
+    sourceKind: dataSource.builtin_kind,
     catalog,
     schema,
     table: processing.source.table,
@@ -487,11 +491,12 @@ async function loadSourceDatasetRows(
         );
       }
       const sourceField = quoteTrinoIdentifier(mapping.sourceField, "source column");
-      const castType = mappedSourceColumnType(
+      const conversion = mappedSourceColumnType(
         column.type,
+        source.sourceKind,
         mapping.targetType,
-      ).trinoViewCastType;
-      const expression = castType ? `CAST(${sourceField} AS ${castType})` : sourceField;
+      );
+      const expression = trinoSourceColumnExpression(sourceField, conversion);
       return `${expression} AS ${quoteTrinoIdentifier(mapping.targetField, "target column")}`;
     })
     .join(", ");
@@ -510,6 +515,7 @@ async function reconcileDatasetRows(
   config: MatchedPipelineConfig,
   sourceRows: readonly DatasetRow[],
   sourceColumns: readonly SourceColumnInfo[],
+  sourceKind: BuiltinDataSourceKind,
 ): Promise<DatasetSyncSummary> {
   const targetRows = await context.services.dataPlane.dataTableRowsList({
     table: config.assetTable,
@@ -527,7 +533,7 @@ async function reconcileDatasetRows(
     records: firstWrite,
   });
   const primaryKey = firstResult.primary_key_field;
-  const fieldTypes = targetFieldTypes(config, sourceColumns);
+  const fieldTypes = targetFieldTypes(config, sourceColumns, sourceKind);
   if (!fieldTypes.has(primaryKey)) {
     throw new Error(
       `pipeline config ${config.name} must map target table primary key ${primaryKey}`,
@@ -649,6 +655,7 @@ function primaryKeyValue(
 function targetFieldTypes(
   config: MatchedPipelineConfig,
   sourceColumns: readonly SourceColumnInfo[],
+  sourceKind: BuiltinDataSourceKind,
 ): Map<string, string> {
   const sourceColumnsByName = new Map(
     sourceColumns.map((column) => [column.name.toLowerCase(), column]),
@@ -659,7 +666,7 @@ function targetFieldTypes(
     if (sourceColumn) {
       fieldTypes.set(
         mapping.targetField,
-        mappedSourceColumnType(sourceColumn.type, mapping.targetType).modelType,
+        mappedSourceColumnType(sourceColumn.type, sourceKind, mapping.targetType).modelType,
       );
     }
   }
@@ -696,13 +703,15 @@ function normalizeComparableValue(value: unknown, type: string | undefined): unk
   }
 }
 
-function mappedSourceColumnType(type: string, targetType?: "string") {
-  const resolved = resolveSourceColumnType(type, {
-    highPrecisionDecimal: targetType === "string" ? "string" : "reject",
+function mappedSourceColumnType(
+  type: string,
+  sourceKind: BuiltinDataSourceKind,
+  targetType?: "string",
+) {
+  return resolveSourceColumnType(type, {
+    sourceKind,
+    targetType,
   });
-  return targetType === "string"
-    ? { modelType: "string" as const, trinoViewCastType: "VARCHAR" }
-    : resolved;
 }
 
 function quoteTrinoIdentifier(value: string, label = "trino identifier"): string {
